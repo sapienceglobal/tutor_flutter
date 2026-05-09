@@ -364,6 +364,13 @@ class _ManageLessonsScreenState extends State<ManageLessonsScreen> {
                           ),
                           keyboardType: TextInputType.number,
                         ),
+                        const SizedBox(height: 12),
+                        OutlinedButton.icon(
+                          onPressed: () => _pickAndUploadVideo(setDialogState, videoUrlController),
+                          icon: const Icon(Icons.upload_file, size: 18),
+                          label: const Text('Upload Video (HLS)'),
+                          style: OutlinedButton.styleFrom(foregroundColor: AppColors.primary),
+                        ),
                       ],
 
                       // DOCUMENT TYPE
@@ -580,6 +587,43 @@ class _ManageLessonsScreenState extends State<ManageLessonsScreen> {
               const SnackBar(content: Text('File uploaded!'), backgroundColor: Colors.green),
             );
           }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _pickAndUploadVideo(StateSetter setDialogState, TextEditingController urlController) async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.video,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        setState(() => _isLoading = true);
+        
+        final file = File(result.files.single.path!);
+        final uploadResult = await UploadService.uploadVideoHls(file);
+
+        if (uploadResult['success']) {
+          setDialogState(() {
+            urlController.text = uploadResult['estimatedPlaylistUrl'] ?? uploadResult['fileUrl'] ?? '';
+          });
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Video uploaded and processing for HLS!'), backgroundColor: Colors.green),
+            );
+          }
+        } else {
+            throw Exception(uploadResult['message'] ?? 'Upload failed');
         }
       }
     } catch (e) {

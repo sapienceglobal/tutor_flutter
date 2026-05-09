@@ -152,6 +152,9 @@ class CourseService {
     List<Map<String, dynamic>>? modules,
     List<String>? requirements,
     List<String>? whatYouWillLearn,
+    bool requireApproval = false,
+    int maxStudents = 0,
+    String visibility = 'institute',
   }) async {
     try {
       final token = await AuthService.getToken();
@@ -170,6 +173,11 @@ class CourseService {
           if (modules != null) 'modules': modules,
           if (requirements != null) 'requirements': requirements,
           if (whatYouWillLearn != null) 'whatYouWillLearn': whatYouWillLearn,
+          'enrollmentSettings': {
+            'requireApproval': requireApproval,
+            'maxStudents': maxStudents,
+          },
+          'visibility': visibility,
         },
         token: token,
       );

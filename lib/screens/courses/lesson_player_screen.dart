@@ -7,6 +7,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/lesson_model.dart';
 import '../../utils/constants.dart';
+import '../../config/api_config.dart';
+import '../../services/enrollment_service.dart';
 
 class LessonPlayerScreen extends StatefulWidget {
   final LessonModel lesson;
@@ -38,7 +40,14 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    _videoUrl = widget.lesson.content.videoUrl;
+    String? url = widget.lesson.content.videoUrl;
+    
+    if (url != null && url.startsWith('/')) {
+      final domain = ApiConfig.baseUrl.replaceAll('/api', '');
+      url = '$domain$url';
+    }
+    
+    _videoUrl = url;
     _loadInitialPosition().then((_) => _initPlayer());
   }
 
@@ -466,11 +475,41 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
             const SizedBox(width: 12),
             Expanded(
               child: ElevatedButton(
-                onPressed: () {
-                  // TODO: mark complete and navigate to next lesson
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Marked complete (demo).')),
-                  );
+                onPressed: () async {
+                  try {
+                    int pos = 0;
+                    if (_youtubeController != null) {
+                      pos = _youtubeController!.value.position.inSeconds;
+                    } else if (_videoPlayerController != null) {
+                      pos = _videoPlayerController!.value.position.inSeconds;
+                    }
+
+                    await EnrollmentService.updateProgress(
+                      courseId: widget.courseId,
+                      lessonId: widget.lesson.id,
+                      watchedDuration: pos,
+                      isCompleted: true,
+                    );
+
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Lesson marked as complete! 🎉'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      // TODO: Navigate to next lesson
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to update progress: $e'),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,

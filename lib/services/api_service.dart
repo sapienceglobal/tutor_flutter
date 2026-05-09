@@ -125,7 +125,29 @@ class ApiService {
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return data;
     } else {
-      throw Exception(data['message'] ?? 'Something went wrong');
+      throw ApiException(
+        message: data['message'] ?? 'Something went wrong',
+        featureLocked: data['featureLocked'] == true,
+        creditExhausted: data['creditExhausted'] == true,
+        data: data,
+      );
     }
   }
+}
+
+class ApiException implements Exception {
+  final String message;
+  final bool featureLocked;
+  final bool creditExhausted;
+  final dynamic data;
+
+  ApiException({
+    required this.message,
+    this.featureLocked = false,
+    this.creditExhausted = false,
+    this.data,
+  });
+
+  @override
+  String toString() => message;
 }

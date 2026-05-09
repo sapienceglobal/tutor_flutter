@@ -8,6 +8,7 @@ import 'providers/appointment_provider.dart';
 import 'providers/course_provider.dart'; 
 import 'providers/enrollment_provider.dart';
 import 'providers/tutor_dashboard_provider.dart';
+import 'providers/subscription_provider.dart';
 import 'screens/splash_screen.dart';
 import 'utils/constants.dart';
 
@@ -30,7 +31,7 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => EnrollmentProvider()),
         ChangeNotifierProvider(create: (_) => DashboardProvider()),
         ChangeNotifierProvider(create: (_) => ScheduleProvider()),
-
+        ChangeNotifierProvider(create: (_) => SubscriptionProvider()),
       ],
       child: MaterialApp(
         title: AppStrings.appName,

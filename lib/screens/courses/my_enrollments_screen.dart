@@ -6,7 +6,8 @@ import '../../utils/constants.dart';
 import 'course_detail_screen.dart';
 
 class MyEnrollmentsScreen extends StatefulWidget {
-  const MyEnrollmentsScreen({super.key});
+  final bool embedded;
+  const MyEnrollmentsScreen({super.key, this.embedded = false});
 
   @override
   State<MyEnrollmentsScreen> createState() => _MyEnrollmentsScreenState();
@@ -38,6 +39,37 @@ class _MyEnrollmentsScreenState extends State<MyEnrollmentsScreen>
   Widget build(BuildContext context) {
     final enrollmentProvider = Provider.of<EnrollmentProvider>(context);
 
+    final body = RefreshIndicator(
+      onRefresh: () => enrollmentProvider.fetchMyEnrollments(),
+      child: enrollmentProvider.isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                _buildEnrollmentsList(enrollmentProvider.activeEnrollments),
+                _buildEnrollmentsList(enrollmentProvider.completedEnrollments),
+              ],
+            ),
+    );
+
+    if (widget.embedded) {
+      return Column(
+        children: [
+          TabBar(
+            controller: _tabController,
+            indicatorColor: AppColors.primary,
+            labelColor: AppColors.primary,
+            unselectedLabelColor: Colors.grey,
+            tabs: const [
+              Tab(text: 'In Progress'),
+              Tab(text: 'Completed'),
+            ],
+          ),
+          Expanded(child: body),
+        ],
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('My Courses'),
@@ -53,20 +85,7 @@ class _MyEnrollmentsScreenState extends State<MyEnrollmentsScreen>
           ],
         ),
       ),
-      body: RefreshIndicator(
-        onRefresh: () => enrollmentProvider.fetchMyEnrollments(),
-        child: enrollmentProvider.isLoading
-            ? const Center(child: CircularProgressIndicator())
-            : TabBarView(
-                controller: _tabController,
-                children: [
-                  _buildEnrollmentsList(enrollmentProvider.activeEnrollments),
-                  _buildEnrollmentsList(
-                    enrollmentProvider.completedEnrollments,
-                  ),
-                ],
-              ),
-      ),
+      body: body,
     );
   }
 

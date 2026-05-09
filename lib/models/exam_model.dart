@@ -92,6 +92,7 @@ class ExamModel {
   final DateTime? startDate;
   final DateTime? endDate;
   final bool isScheduled;
+  final bool useFaceProctoring;
   final String status;
   final bool isPublished;
   final int attemptCount;
@@ -124,6 +125,7 @@ class ExamModel {
     this.startDate,
     this.endDate,
     this.isScheduled = false,
+    this.useFaceProctoring = false,
     this.status = 'draft',
     this.isPublished = false,
     this.attemptCount = 0,
@@ -164,6 +166,7 @@ class ExamModel {
       endDate:
           json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
       isScheduled: json['isScheduled'] ?? false,
+      useFaceProctoring: json['useFaceProctoring'] ?? false,
       status: json['status'] ?? 'draft',
       isPublished: json['isPublished'] ?? false,
       attemptCount: json['attemptCount'] ?? 0,
@@ -203,6 +206,7 @@ class ExamModel {
       'startDate': startDate?.toIso8601String(),
       'endDate': endDate?.toIso8601String(),
       'isScheduled': isScheduled,
+      'useFaceProctoring': useFaceProctoring,
       'status': status,
       'isPublished': isPublished,
       'attemptCount': attemptCount,

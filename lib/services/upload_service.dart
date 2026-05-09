@@ -8,11 +8,11 @@ import 'auth_service.dart';
 class UploadService {
   static const String _endpoint = '/upload';
 
-  // Upload single file
+  // Upload single file (document/file)
   static Future<Map<String, dynamic>> uploadFile(File file) async {
     try {
       final token = await AuthService.getToken();
-      final uri = Uri.parse('${ApiConfig.baseUrl}$_endpoint/single');
+      final uri = Uri.parse('${ApiConfig.baseUrl}$_endpoint/file');
 
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $token';
@@ -31,21 +31,18 @@ class UploadService {
     }
   }
 
-  // Upload multiple files
-  static Future<Map<String, dynamic>> uploadMultipleFiles(
-      List<File> files) async {
+  // Upload image
+  static Future<Map<String, dynamic>> uploadImage(File file) async {
     try {
       final token = await AuthService.getToken();
-      final uri = Uri.parse('${ApiConfig.baseUrl}$_endpoint/multiple');
+      final uri = Uri.parse('${ApiConfig.baseUrl}$_endpoint/image');
 
       final request = http.MultipartRequest('POST', uri);
       request.headers['Authorization'] = 'Bearer $token';
 
-      for (var file in files) {
-        request.files.add(
-          await http.MultipartFile.fromPath('files', file.path),
-        );
-      }
+      request.files.add(
+        await http.MultipartFile.fromPath('image', file.path),
+      );
 
       final streamedResponse = await request.send();
       final response = await http.Response.fromStream(streamedResponse);
@@ -57,33 +54,24 @@ class UploadService {
     }
   }
 
-  // Delete file
-  static Future<Map<String, dynamic>> deleteFile(String publicId) async {
+  // Upload Video for HLS processing
+  static Future<Map<String, dynamic>> uploadVideoHls(File file) async {
     try {
       final token = await AuthService.getToken();
+      final uri = Uri.parse('${ApiConfig.baseUrl}$_endpoint/video-hls');
 
-      final response = await ApiService.delete(
-        '$_endpoint/$publicId',
-        token: token,
+      final request = http.MultipartRequest('POST', uri);
+      request.headers['Authorization'] = 'Bearer $token';
+
+      request.files.add(
+        await http.MultipartFile.fromPath('video', file.path),
       );
 
-      return response;
-    } catch (e) {
-      throw Exception(e.toString());
-    }
-  }
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      final data = json.decode(response.body);
 
-  // Get file info
-  static Future<Map<String, dynamic>> getFileInfo(String publicId) async {
-    try {
-      final token = await AuthService.getToken();
-
-      final response = await ApiService.get(
-        '$_endpoint/info/$publicId',
-        token: token,
-      );
-
-      return response;
+      return data;
     } catch (e) {
       throw Exception(e.toString());
     }

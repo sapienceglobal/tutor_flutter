@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
+import '../../services/upload_service.dart';
 import '../../providers/course_provider.dart';
 import '../../providers/category_provider.dart';
 import '../../models/category_model.dart';
@@ -24,6 +27,11 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
   String _selectedLanguage = 'English';
   bool _isFree = true;
 
+  String _visibility = 'institute';
+  bool _requireApproval = false;
+  final _maxStudentsController = TextEditingController(text: '0');
+  String? _thumbnailUrl;
+
   List<TextEditingController> _requirementControllers = [TextEditingController()];
   List<TextEditingController> _learningControllers = [TextEditingController()];
   List<ModuleData> _modules = [];
@@ -42,6 +50,7 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
     _descriptionController.dispose();
     _priceController.dispose();
     _durationController.dispose();
+    _maxStudentsController.dispose();
     for (var controller in _requirementControllers) {
       controller.dispose();
     }
@@ -143,6 +152,32 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
     });
   }
 
+  Future<void> _pickAndUploadThumbnail() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(type: FileType.image);
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        final uploadResult = await UploadService.uploadImage(file);
+        if (uploadResult['success']) {
+          setState(() {
+            _thumbnailUrl = uploadResult['fileUrl'];
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Thumbnail uploaded!'), backgroundColor: Colors.green),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e'), backgroundColor: Colors.red),
+        );
+      }
+    }
+  }
+
   Future<void> _createCourse() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -187,6 +222,10 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
       modules: modules,
       requirements: requirements,
       whatYouWillLearn: whatYouWillLearn,
+      requireApproval: _requireApproval,
+      maxStudents: int.tryParse(_maxStudentsController.text) ?? 0,
+      visibility: _visibility,
+      thumbnail: _thumbnailUrl,
     );
 
     if (!mounted) return;
@@ -265,6 +304,31 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
               ),
               const SizedBox(height: 16),
 
+              // Thumbnail Upload
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _pickAndUploadThumbnail,
+                      icon: const Icon(Icons.image),
+                      label: Text(_thumbnailUrl == null ? 'Upload Thumbnail' : 'Change Thumbnail'),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                  if (_thumbnailUrl != null) ...[
+                    const SizedBox(width: 12),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(_thumbnailUrl!, width: 50, height: 50, fit: BoxFit.cover),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 16),
+
               // Category Dropdown
               DropdownButtonFormField<CategoryModel>(
                 initialValue: _selectedCategory,
@@ -290,6 +354,28 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
                     return 'Please select a category';
                   }
                   return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Visibility Dropdown
+              DropdownButtonFormField<String>(
+                initialValue: _visibility,
+                decoration: InputDecoration(
+                  labelText: 'Visibility',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'public', child: Text('Public (Everyone)')),
+                  DropdownMenuItem(value: 'institute', child: Text('Institute Only')),
+                  DropdownMenuItem(value: 'private', child: Text('Private (Hidden)')),
+                ],
+                onChanged: (value) {
+                  setState(() {
+                    _visibility = value!;
+                  });
                 },
               ),
               const SizedBox(height: 16),
@@ -386,6 +472,35 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
                   },
                 ),
               ],
+              const SizedBox(height: 24),
+
+              // Settings Section
+              _buildSectionTitle('Enrollment Settings'),
+              const SizedBox(height: 16),
+
+              SwitchListTile(
+                title: const Text('Require Manual Approval'),
+                subtitle: const Text('You must approve students before they can access'),
+                value: _requireApproval,
+                onChanged: (value) {
+                  setState(() {
+                    _requireApproval = value;
+                  });
+                },
+                contentPadding: EdgeInsets.zero,
+              ),
+              const SizedBox(height: 16),
+
+              TextFormField(
+                controller: _maxStudentsController,
+                decoration: InputDecoration(
+                  labelText: 'Max Students Limit (0 for unlimited)',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                keyboardType: TextInputType.number,
+              ),
               const SizedBox(height: 24),
 
               // Course Structure

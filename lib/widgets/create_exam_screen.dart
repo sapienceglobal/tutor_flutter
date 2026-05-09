@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/course_model.dart';
 import '../models/exam_model.dart';
 import '../models/lesson_model.dart';
 import '../services/exam_service.dart';
 import '../services/ai_service.dart';
 import '../utils/constants.dart';
+import 'feature_gate.dart';
 
 class CreateExamScreen extends StatefulWidget {
   final CourseModel course;
@@ -33,8 +35,9 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
   bool _shuffleOptions = false;
   bool _showResultImmediately = false;
   bool _showCorrectAnswers = true;
-  bool _allowRetake = false;
-  int _maxAttempts = 1;
+  bool _allowRetake = true;
+  bool _useFaceProctoring = false;
+  int _maxAttempts = 3;
   bool _isScheduled = false;
   DateTime? _startDate;
   DateTime? _endDate;
@@ -64,9 +67,10 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
     _showResultImmediately = exam.showResultImmediately;
     _showCorrectAnswers = exam.showCorrectAnswers;
     _allowRetake = exam.allowRetake;
-    _maxAttempts = exam.maxAttempts;
-    _isScheduled = exam.isScheduled;
-    _startDate = exam.startDate;
+    _maxAttempts = widget.existingExam!.maxAttempts;
+    _isScheduled = widget.existingExam!.isScheduled;
+    _useFaceProctoring = widget.existingExam!.useFaceProctoring;
+    _startDate = widget.existingExam!.startDate;
     _endDate = exam.endDate;
     _questions = List.from(exam.questions);
   }
@@ -78,10 +82,14 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
         title: Text(widget.existingExam == null ? 'Create Exam' : 'Edit Exam'),
         actions: [
           if (_questions.isNotEmpty)
-            IconButton(
-              icon: const Icon(Icons.auto_awesome),
-              onPressed: _showAIGenerateDialog,
-              tooltip: 'Generate more with AI',
+            FeatureGate(
+              featureKey: 'aiAssessment',
+              showLockOverlay: true,
+              child: IconButton(
+                icon: const Icon(Icons.auto_awesome),
+                onPressed: _showAIGenerateDialog,
+                tooltip: 'Generate more with AI',
+              ),
             ),
           IconButton(
             icon: const Icon(Icons.save),
@@ -285,6 +293,17 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
               onChanged: (value) => setState(() => _isScheduled = value),
               contentPadding: EdgeInsets.zero,
             ),
+            FeatureGate(
+              featureKey: 'aiAssessment',
+              showLockOverlay: true,
+              child: SwitchListTile(
+                title: const Text('Enable AI Proctoring'),
+                subtitle: const Text('Requires camera and mic access'),
+                value: _useFaceProctoring,
+                onChanged: (value) => setState(() => _useFaceProctoring = value),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
             if (_isScheduled) ...[
               const SizedBox(height: 12),
               ListTile(
@@ -333,10 +352,14 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
           children: [
             Text('Questions (${_questions.length})', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             if (_questions.isEmpty)
-              TextButton.icon(
-                onPressed: _showAIGenerateDialog,
-                icon: const Icon(Icons.auto_awesome),
-                label: const Text('AI Generate'),
+              FeatureGate(
+                featureKey: 'aiAssessment',
+                showLockOverlay: true,
+                child: TextButton.icon(
+                  onPressed: _showAIGenerateDialog,
+                  icon: const Icon(Icons.auto_awesome),
+                  label: const Text('AI Generate'),
+                ),
               ),
           ],
         ),
@@ -384,13 +407,17 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: _showAIGenerateDialog,
-                  icon: const Icon(Icons.auto_awesome),
-                  label: const Text('AI Generate'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.purple,
-                    foregroundColor: Colors.white,
+                child: FeatureGate(
+                  featureKey: 'aiAssessment',
+                  showLockOverlay: true,
+                  child: ElevatedButton.icon(
+                    onPressed: _showAIGenerateDialog,
+                    icon: const Icon(Icons.auto_awesome),
+                    label: const Text('AI Generate'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.purple,
+                      foregroundColor: Colors.white,
+                    ),
                   ),
                 ),
               ),
@@ -469,14 +496,17 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
                 _addManualQuestion();
               },
             ),
-            ListTile(
-              leading: const Icon(Icons.auto_awesome, color: Colors.purple),
-              title: const Text('Generate with AI'),
-              subtitle: const Text('Auto-create multiple questions'),
-              onTap: () {
-                Navigator.pop(context);
-                _showAIGenerateDialog();
-              },
+            FeatureGate(
+              featureKey: 'aiAssessment',
+              child: ListTile(
+                leading: const Icon(Icons.auto_awesome, color: Colors.purple),
+                title: const Text('Generate with AI'),
+                subtitle: const Text('Auto-create multiple questions'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showAIGenerateDialog();
+                },
+              ),
             ),
           ],
         ),
@@ -731,6 +761,7 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
           showCorrectAnswers: _showCorrectAnswers,
           allowRetake: _allowRetake,
           maxAttempts: _maxAttempts,
+          useFaceProctoring: _useFaceProctoring,
           startDate: _startDate,
           endDate: _endDate,
         );
@@ -750,7 +781,8 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
             'showResultImmediately': _showResultImmediately,
             'showCorrectAnswers': _showCorrectAnswers,
             'allowRetake': _allowRetake,
-            'maxAttempts': _maxAttempts,
+            'useFaceProctoring': _useFaceProctoring,
+            'maxAttempts': _allowRetake ? _maxAttempts : 1,
             'startDate': _startDate?.toIso8601String(),
             'endDate': _endDate?.toIso8601String(),
             'isScheduled': _isScheduled,

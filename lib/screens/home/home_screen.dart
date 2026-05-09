@@ -14,7 +14,11 @@ import '../courses/courses_screen.dart';
 import '../courses/my_enrollments_screen.dart';
 import '../profile/profile_screen.dart';
 import '../appointments/appointments_screen.dart';
+import '../student/student_exams_screen.dart';
+import '../student/student_learning_screen.dart';
+import '../student/ai_buddy/ai_buddy_screen.dart';
 import '../tutor/tutor_dashboard_screen.dart';
+import '../../widgets/feature_gate.dart';
 import 'dart:ui';
 
 class HomeScreen extends StatefulWidget {
@@ -74,8 +78,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final List<Widget> studentScreens = [
       const StudentHomeContent(),
       const CoursesScreen(),
-      const MyEnrollmentsScreen(),
-      const AppointmentsScreen(),
+      const StudentLearningScreen(),
+      const AiBuddyScreen(),
       const ProfileScreen(),
     ];
 
@@ -107,9 +111,9 @@ class _HomeScreenState extends State<HomeScreen> {
             label: 'My Learning',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.calendar_today_outlined),
-            activeIcon: Icon(Icons.calendar_today),
-            label: 'Bookings',
+            icon: Icon(Icons.smart_toy_outlined),
+            activeIcon: Icon(Icons.smart_toy),
+            label: 'AI Buddy',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
@@ -208,6 +212,10 @@ class StudentHomeContent extends StatelessWidget {
 
               // Quick Actions
               _buildQuickActions(context),
+              const SizedBox(height: 24),
+
+              // AI Tools Section
+              _buildAITools(context),
               const SizedBox(height: 24),
 
               // Categories Section
@@ -467,38 +475,171 @@ class StudentHomeContent extends StatelessWidget {
   }
 
   Widget _buildQuickActions(BuildContext context) {
-    return Row(
+    return GridView.count(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisCount: 3,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 0.85,
       children: [
-        Expanded(
-          child: _buildQuickActionCard(
-            context,
-            icon: Icons.calendar_today_outlined,
-            title: 'My Bookings',
-            color: Colors.blue,
-            onTap: () {
-              Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const AppointmentsScreen()),
-              );
-            },
-          ),
+        _buildQuickActionCard(
+          context,
+          icon: Icons.my_library_books_outlined,
+          title: 'Courses',
+          color: Colors.green,
+          onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const MyEnrollmentsScreen()));
+          },
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildQuickActionCard(
-            context,
-            icon: Icons.my_library_books_outlined,
-            title: 'My Courses',
-            color: Colors.green,
+        _buildQuickActionCard(
+          context,
+          icon: Icons.assignment_outlined,
+          title: 'Exams',
+          color: Colors.orange,
+          onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const StudentExamsScreen()));
+          },
+        ),
+        _buildQuickActionCard(
+          context,
+          icon: Icons.calendar_today_outlined,
+          title: 'Schedule',
+          color: Colors.blue,
+          onTap: () {
+            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AppointmentsScreen()));
+          },
+        ),
+        _buildQuickActionCard(
+          context,
+          icon: Icons.video_camera_front,
+          title: 'Live Class',
+          color: Colors.redAccent,
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Live Classes are available on the Web Platform.')));
+          },
+        ),
+        _buildQuickActionCard(
+          context,
+          icon: Icons.assignment_turned_in,
+          title: 'Assignments',
+          color: Colors.purple,
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Assignments are available on the Web Platform.')));
+          },
+        ),
+        _buildQuickActionCard(
+          context,
+          icon: Icons.bar_chart,
+          title: 'Reports',
+          color: Colors.teal,
+          onTap: () {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reports & Analytics are available on the Web Platform.')));
+          },
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAITools(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'AI Tools',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        FeatureGate(
+          featureKey: 'aiAssistant',
+          showLockOverlay: true,
+          fallback: _buildLockedAICard(context),
+          child: InkWell(
             onTap: () {
               Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const MyEnrollmentsScreen()),
+                MaterialPageRoute(builder: (_) => const AiBuddyScreen()),
               );
             },
+            borderRadius: BorderRadius.circular(16),
+            child: _buildAICard(),
           ),
         ),
       ],
     );
   }
+
+  Widget _buildAICard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.purple.shade50, Colors.deepPurple.shade50],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.purple.shade100),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.purple.shade100, shape: BoxShape.circle),
+            child: const Icon(Icons.smart_toy, color: Colors.deepPurple),
+          ),
+          const SizedBox(width: 16),
+          const Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('AI Buddy', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.deepPurple)),
+                SizedBox(height: 4),
+                Text('Chat with your AI Tutor to solve doubts instantly', style: TextStyle(fontSize: 13, color: Colors.deepPurple)),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: Colors.deepPurple),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLockedAICard(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.grey[100],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade300),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(color: Colors.grey.shade200, shape: BoxShape.circle),
+            child: Icon(Icons.lock, color: Colors.grey[500]),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('AI Buddy', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.grey[700])),
+                const SizedBox(height: 4),
+                Text('Upgrade your institute plan to unlock AI features', style: TextStyle(fontSize: 12, color: Colors.grey[500])),
+              ],
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(color: Colors.purple.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+            child: const Text('PRO', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.purple)),
+          ),
+        ],
+      ),
+    );
+  }
+
 
   Widget _buildQuickActionCard(
     BuildContext context, {

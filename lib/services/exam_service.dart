@@ -63,6 +63,7 @@ class ExamService {
     bool showCorrectAnswers = true,
     bool allowRetake = false,
     int maxAttempts = 1,
+    bool useFaceProctoring = false,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -86,6 +87,7 @@ class ExamService {
           'showCorrectAnswers': showCorrectAnswers,
           'allowRetake': allowRetake,
           'maxAttempts': maxAttempts,
+          'useFaceProctoring': useFaceProctoring,
           if (startDate != null) 'startDate': startDate.toIso8601String(),
           if (endDate != null) 'endDate': endDate.toIso8601String(),
         },
@@ -145,7 +147,7 @@ class ExamService {
       final token = await AuthService.getToken();
 
       final response = await ApiService.post(
-        '$_endpoint/$examId/submit',
+        '/student/exams/$examId/submit',
         body: {
           'answers': answers,
           'timeSpent': timeSpent,
@@ -160,13 +162,61 @@ class ExamService {
     }
   }
 
-  // Get exam attempts
-  static Future<Map<String, dynamic>> getExamAttempts(String examId) async {
+  // Get all exams for student
+  static Future<Map<String, dynamic>> getAllStudentExams() async {
     try {
       final token = await AuthService.getToken();
 
       final response = await ApiService.get(
-        '$_endpoint/$examId/attempts',
+        '/student/exams/all',
+        token: token,
+      );
+
+      return response;
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  // Get exam details for student (taking)
+  static Future<Map<String, dynamic>> getStudentExamById(String id) async {
+    try {
+      final token = await AuthService.getToken();
+
+      final response = await ApiService.get(
+        '/student/exams/$id',
+        token: token,
+      );
+
+      return response;
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  // Check if student can attempt
+  static Future<Map<String, dynamic>> checkCanAttempt(String id) async {
+    try {
+      final token = await AuthService.getToken();
+
+      final response = await ApiService.get(
+        '/student/exams/$id/can-attempt',
+        token: token,
+      );
+
+      return response;
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  // Get Attempt Details
+  static Future<Map<String, dynamic>> getAttemptDetails(String attemptId) async {
+    try {
+      final token = await AuthService.getToken();
+
+      final response = await ApiService.get(
+        '/student/exams/attempt/$attemptId',
         token: token,
       );
 

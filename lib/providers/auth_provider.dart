@@ -20,7 +20,12 @@ class AuthProvider with ChangeNotifier {
     try {
       final isLoggedIn = await AuthService.isLoggedIn();
       if (isLoggedIn) {
-        _user = await AuthService.getCurrentUser();
+        final currentUser = await AuthService.getCurrentUser();
+        if (currentUser != null && (currentUser.role == 'student' || currentUser.role == 'tutor')) {
+          _user = currentUser;
+        } else {
+          await AuthService.logout();
+        }
       }
     } catch (e) {
       _error = e.toString();
@@ -82,7 +87,18 @@ class AuthProvider with ChangeNotifier {
       );
 
       if (response['success']) {
-        _user = UserModel.fromJson(response['user']);
+        final userModel = UserModel.fromJson(response['user']);
+        
+        // Strictly allow only students and tutors
+        if (userModel.role != 'student' && userModel.role != 'tutor') {
+          await AuthService.logout();
+          _error = 'Only students and tutors can access the mobile app. Admins please use the web dashboard.';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+
+        _user = userModel;
         _isLoading = false;
         notifyListeners();
         return true;

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:my_app/screens/appointments/schedule_appointment_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/course_provider.dart';
@@ -11,6 +10,8 @@ import 'manage_appointments_screen.dart';
 import 'tutor_students_screen.dart';
 import '../appointments/appointments_screen.dart';
 import '../profile/profile_screen.dart';
+import '../student/ai_buddy/ai_buddy_screen.dart';
+import '../../widgets/feature_gate.dart';
 
 class TutorDashboardScreen extends StatefulWidget {
   const TutorDashboardScreen({super.key});
@@ -52,6 +53,7 @@ class _TutorDashboardScreenState extends State<TutorDashboardScreen> {
     final List<Widget> screens = [
       const TutorHomeContent(),
       const ManageCoursesScreen(),
+      const TutorStudentsScreen(),
       const AppointmentsScreen(),
       const ProfileScreen(),
     ];
@@ -64,8 +66,8 @@ class _TutorDashboardScreenState extends State<TutorDashboardScreen> {
         type: BottomNavigationBarType.fixed,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: Colors.grey,
-        selectedFontSize: 12,
-        unselectedFontSize: 11,
+        selectedFontSize: 11,
+        unselectedFontSize: 10,
         items: const [
           BottomNavigationBarItem(
             icon: Icon(Icons.dashboard_outlined),
@@ -75,12 +77,17 @@ class _TutorDashboardScreenState extends State<TutorDashboardScreen> {
           BottomNavigationBarItem(
             icon: Icon(Icons.school_outlined),
             activeIcon: Icon(Icons.school),
-            label: 'My Courses',
+            label: 'Courses',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.people_outline),
+            activeIcon: Icon(Icons.people),
+            label: 'Students',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.calendar_today_outlined),
             activeIcon: Icon(Icons.calendar_today),
-            label: 'Appointments',
+            label: 'Schedule',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
@@ -98,7 +105,7 @@ class _TutorDashboardScreenState extends State<TutorDashboardScreen> {
               },
               backgroundColor: AppColors.primary,
               icon: const Icon(Icons.add),
-              label: const Text('Create Course'),
+              label: const Text('New Course'),
             )
           : null,
     );
@@ -281,76 +288,92 @@ class TutorHomeContent extends StatelessWidget {
                     GridView.count(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1.5,
+                      crossAxisCount: 3,
+                      mainAxisSpacing: 16,
+                      crossAxisSpacing: 16,
+                      childAspectRatio: 0.85,
                       children: [
                         _buildActionCard(
                           context,
                           icon: Icons.add_circle_outline,
-                          title: 'Create Course',
+                          title: 'New Course',
                           color: AppColors.primary,
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const CreateCourseScreen(),
-                              ),
-                            );
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const CreateCourseScreen()));
                           },
                         ),
                         _buildActionCard(
                           context,
                           icon: Icons.edit_note,
-                          title: 'Manage Courses',
+                          title: 'Courses',
                           color: Colors.purple,
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const ManageCoursesScreen(),
-                              ),
-                            );
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ManageCoursesScreen()));
                           },
                         ),
                         _buildActionCard(
                           context,
                           icon: Icons.people_outline,
-                          title: 'My Students',
+                          title: 'Students',
                           color: Colors.green,
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const TutorStudentsScreen(),
-                              ),
-                            );
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TutorStudentsScreen()));
                           },
                         ),
                         _buildActionCard(
                           context,
-                          icon: Icons.event_available,
+                          icon: Icons.calendar_today,
                           title: 'Appointments',
                           color: Colors.orange,
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const ManageAppointmentsScreen(),
-                              ),
-                            );
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ManageAppointmentsScreen()));
                           },
                         ),
                         _buildActionCard(
                           context,
-                          icon: Icons.event_available,
-                          title: 'Schedule Appointments',
-                          color: Colors.orange,
+                          icon: Icons.schedule,
+                          title: 'Schedule',
+                          color: Colors.teal,
                           onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const ScheduleManagementScreen(),
-                              ),
-                            );
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ManageAppointmentsScreen()));
+                          },
+                        ),
+                        _buildActionCard(
+                          context,
+                          icon: Icons.smart_toy,
+                          title: 'AI Buddy',
+                          color: Colors.deepPurple,
+                          isPremium: true,
+                          featureKey: 'aiAssistant',
+                          onTap: () {
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AiBuddyScreen()));
+                          },
+                        ),
+                        _buildActionCard(
+                          context,
+                          icon: Icons.bar_chart,
+                          title: 'Reports',
+                          color: Colors.blueGrey,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reports & Analytics are available on the Web Platform.')));
+                          },
+                        ),
+                        _buildActionCard(
+                          context,
+                          icon: Icons.campaign,
+                          title: 'Announcements',
+                          color: Colors.redAccent,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Announcements are available on the Web Platform.')));
+                          },
+                        ),
+                        _buildActionCard(
+                          context,
+                          icon: Icons.forum,
+                          title: 'Discussions',
+                          color: Colors.indigo,
+                          onTap: () {
+                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Discussions are available on the Web Platform.')));
                           },
                         ),
                       ],
@@ -467,8 +490,10 @@ class TutorHomeContent extends StatelessWidget {
     required String title,
     required Color color,
     required VoidCallback onTap,
+    bool isPremium = false,
+    String? featureKey,
   }) {
-    return InkWell(
+    Widget card = InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
@@ -508,6 +533,35 @@ class TutorHomeContent extends StatelessWidget {
         ),
       ),
     );
+
+    if (isPremium && featureKey != null) {
+      return FeatureGate(
+        featureKey: featureKey,
+        showLockOverlay: true,
+        child: Stack(
+          children: [
+            card,
+            Positioned(
+              top: -4,
+              right: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.amber,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
+                child: const Text(
+                  'PRO',
+                  style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Colors.black),
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+    return card;
   }
 
   Widget _buildCourseItem(BuildContext context, course) {

@@ -58,4 +58,73 @@ class AIService {
       throw Exception(e.toString());
     }
   }
+
+  // Get Chat Sessions
+  static Future<Map<String, dynamic>> getChatSessions() async {
+    try {
+      final token = await AuthService.getToken();
+      final response = await ApiService.get(
+        '$_endpoint/chat-sessions',
+        token: token,
+      );
+      return response;
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  // Create Chat Session
+  static Future<Map<String, dynamic>> createChatSession({
+    required String title,
+    String? initialMessage,
+  }) async {
+    try {
+      final token = await AuthService.getToken();
+      final response = await ApiService.post(
+        '$_endpoint/chat-sessions',
+        body: {
+          'title': title,
+          if (initialMessage != null) 'initialMessage': initialMessage,
+        },
+        token: token,
+      );
+      return response;
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  // Get Chat Session By ID
+  static Future<Map<String, dynamic>> getChatSessionById(String sessionId) async {
+    try {
+      final token = await AuthService.getToken();
+      final response = await ApiService.get(
+        '$_endpoint/chat-sessions/$sessionId',
+        token: token,
+      );
+      return response;
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  // Add Message to Chat Session
+  static Future<Map<String, dynamic>> addMessageToChatSession({
+    required String sessionId,
+    required String message,
+  }) async {
+    try {
+      final token = await AuthService.getToken();
+      final response = await ApiService.post(
+        '$_endpoint/chat-sessions/$sessionId/message',
+        body: {
+          'message': message,
+        },
+        token: token,
+      );
+      return response;
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
 }

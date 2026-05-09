@@ -1,3 +1,4 @@
+import '../config/api_config.dart';
 import '../models/enrollment_model.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
@@ -110,7 +111,7 @@ class EnrollmentService {
 
   // ✅ NEW: Update lesson progress
   static Future<Map<String, dynamic>> updateProgress({
-    required String enrollmentId,
+    required String courseId,
     required String lessonId,
     required int watchedDuration,
     bool isCompleted = false,
@@ -118,12 +119,13 @@ class EnrollmentService {
     try {
       final token = await AuthService.getToken();
 
-      final response = await ApiService.patch(
-        '$_endpoint/$enrollmentId/progress',
+      final response = await ApiService.post(
+        ApiConfig.progressEndpoint,
         body: {
+          'courseId': courseId,
           'lessonId': lessonId,
-          'watchedDuration': watchedDuration,
-          'isCompleted': isCompleted,
+          'timeSpent': watchedDuration,
+          'completed': isCompleted,
         },
         token: token,
       );

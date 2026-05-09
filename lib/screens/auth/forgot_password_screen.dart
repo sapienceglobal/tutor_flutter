@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/auth_service.dart';
 import '../../utils/constants.dart';
-import 'reset_password_screen.dart';
 
 class ForgotPasswordScreen extends StatefulWidget {
   const ForgotPasswordScreen({super.key});
@@ -60,7 +59,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
               // Subtitle
               Text(
-                'Enter your email address and we\'ll send you an OTP to reset your password.',
+                'Enter your email address and we\'ll send you a link to reset your password.',
                 style: TextStyle(
                   fontSize: 14,
                   color: Colors.grey[600],
@@ -95,11 +94,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               ),
               const SizedBox(height: 24),
 
-              // Send OTP Button
+              // Send Link Button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _sendOTP,
+                  onPressed: _isLoading ? null : _sendResetLink,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primary,
                     foregroundColor: Colors.white,
@@ -117,7 +116,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text('Send OTP', style: TextStyle(fontSize: 16)),
+                      : const Text('Send Reset Link', style: TextStyle(fontSize: 16)),
                 ),
               ),
               const SizedBox(height: 16),
@@ -142,7 +141,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     );
   }
 
-  Future<void> _sendOTP() async {
+  Future<void> _sendResetLink() async {
     if (!_formKey.currentState!.validate()) return;
 
     setState(() {
@@ -162,22 +161,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
         if (response['success']) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('OTP sent to your email successfully!'),
+              content: Text('Reset link sent to your email successfully! Please check your inbox.'),
               backgroundColor: AppColors.success,
+              duration: Duration(seconds: 4),
             ),
           );
 
-          // Navigate to Reset Password Screen
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-              builder: (_) =>
-                  ResetPasswordScreen(email: _emailController.text.trim()),
-            ),
-          );
+          // Return to Login Screen since they need to click the email link
+          Navigator.of(context).pop();
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(response['message'] ?? 'Failed to send OTP'),
+              content: Text(response['message'] ?? 'Failed to send reset link'),
               backgroundColor: Colors.red,
             ),
           );

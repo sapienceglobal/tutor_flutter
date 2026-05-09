@@ -123,6 +123,9 @@ class CourseProvider with ChangeNotifier {
     List<Map<String, dynamic>>? modules,
     List<String>? requirements,
     List<String>? whatYouWillLearn,
+    bool requireApproval = false,
+    int maxStudents = 0,
+    String visibility = 'institute',
   }) async {
     _isLoading = true;
     _error = null;
@@ -141,6 +144,9 @@ class CourseProvider with ChangeNotifier {
         modules: modules,
         requirements: requirements,
         whatYouWillLearn: whatYouWillLearn,
+        requireApproval: requireApproval,
+        maxStudents: maxStudents,
+        visibility: visibility,
       );
 
       if (response['success']) {
