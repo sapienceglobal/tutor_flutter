@@ -8,7 +8,11 @@ import 'create_course_screen.dart';
 import 'manage_courses_screen.dart';
 import 'manage_appointments_screen.dart';
 import 'tutor_students_screen.dart';
+import 'live_classes/tutor_live_classes_screen.dart';
+import 'reports/tutor_reports_screen.dart';
 import '../appointments/appointments_screen.dart';
+import '../../widgets/performance_chart.dart';
+import '../../models/dashboard_stats_model.dart';
 import '../profile/profile_screen.dart';
 import '../student/ai_buddy/ai_buddy_screen.dart';
 import '../../widgets/feature_gate.dart';
@@ -55,6 +59,7 @@ class _TutorDashboardScreenState extends State<TutorDashboardScreen> {
       const ManageCoursesScreen(),
       const TutorStudentsScreen(),
       const AppointmentsScreen(),
+      const TutorLiveClassesScreen(),
       const ProfileScreen(),
     ];
 
@@ -88,6 +93,11 @@ class _TutorDashboardScreenState extends State<TutorDashboardScreen> {
             icon: Icon(Icons.calendar_today_outlined),
             activeIcon: Icon(Icons.calendar_today),
             label: 'Schedule',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.video_camera_front_outlined),
+            activeIcon: Icon(Icons.video_camera_front),
+            label: 'Live',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
@@ -355,7 +365,7 @@ class TutorHomeContent extends StatelessWidget {
                           title: 'Reports',
                           color: Colors.blueGrey,
                           onTap: () {
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Reports & Analytics are available on the Web Platform.')));
+                            Navigator.of(context).push(MaterialPageRoute(builder: (_) => const TutorReportsScreen()));
                           },
                         ),
                         _buildActionCard(
@@ -380,7 +390,19 @@ class TutorHomeContent extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
 
-                    // Recent Courses
+                    // SECTION 2: Action Queue
+                    _buildActionQueue(context),
+                    const SizedBox(height: 24),
+
+                    // SECTION 3: Performance Chart
+                    _buildPerformanceChart(context),
+                    const SizedBox(height: 24),
+
+                    // SECTION 4: Recent Student Activity
+                    _buildRecentActivity(context),
+                    const SizedBox(height: 24),
+
+                    // Recent Courses Header
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -562,6 +584,106 @@ class TutorHomeContent extends StatelessWidget {
       );
     }
     return card;
+  }
+
+  Widget _buildActionQueue(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Action Queue", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _buildQueueCard(Icons.assignment_outlined, "Pending", "Assignments", Colors.blue)),
+            const SizedBox(width: 12),
+            Expanded(child: _buildQueueCard(Icons.videocam_outlined, "Upcoming", "Classes", Colors.green)),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildQueueCard(IconData icon, String title, String subtitle, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 24),
+          const SizedBox(height: 12),
+          Text(title, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(subtitle, style: TextStyle(color: Colors.grey[600], fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceChart(BuildContext context) {
+    final data = [
+      ChartDataPoint(label: 'Mon', value: 10, secondaryValue: 5),
+      ChartDataPoint(label: 'Tue', value: 15, secondaryValue: 8),
+      ChartDataPoint(label: 'Wed', value: 12, secondaryValue: 12),
+      ChartDataPoint(label: 'Thu', value: 20, secondaryValue: 15),
+      ChartDataPoint(label: 'Fri', value: 25, secondaryValue: 18),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Course Performance", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Container(
+          height: 200,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: PerformanceChart(data: data, isTutor: true),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildRecentActivity(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text("Recent Student Activity", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: ListView.separated(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: 3,
+            separatorBuilder: (_, __) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              return ListTile(
+                leading: const CircleAvatar(backgroundColor: Colors.blueGrey, child: Icon(Icons.person, color: Colors.white, size: 20)),
+                title: const Text("Student Name", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                subtitle: const Text("Course Title", style: TextStyle(fontSize: 12)),
+                trailing: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(color: Colors.green.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+                  child: const Text("85%", style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildCourseItem(BuildContext context, course) {

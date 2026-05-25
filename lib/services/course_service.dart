@@ -12,6 +12,7 @@ class CourseService {
     bool? isFree,
     String? search,
     String? tutorId,
+    String? scope,
   }) async {
     try {
       print('🔄 Fetching all courses...');
@@ -22,10 +23,14 @@ class CourseService {
       if (isFree != null) queryParams['isFree'] = isFree.toString();
       if (search != null) queryParams['search'] = search;
       if (tutorId != null) queryParams['tutorId'] = tutorId;
+      if (scope != null) queryParams['scope'] = scope;
+
+      final token = await AuthService.getToken();
 
       final response = await ApiService.get(
         _endpoint,
         queryParams: queryParams,
+        token: token,
       );
 
       print('📥 API Response received');

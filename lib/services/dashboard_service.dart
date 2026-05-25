@@ -1,4 +1,4 @@
-import '../models/dashboard_stats_model.dart';
+import '../models/tutor_dashboard_stats_model.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
 

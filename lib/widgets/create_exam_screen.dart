@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../models/course_model.dart';
 import '../models/exam_model.dart';
-import '../models/lesson_model.dart';
 import '../services/exam_service.dart';
 import '../services/ai_service.dart';
 import '../utils/constants.dart';
@@ -37,6 +35,10 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
   bool _showCorrectAnswers = true;
   bool _allowRetake = true;
   bool _useFaceProctoring = false;
+  bool _isAudioProctoringEnabled = false;
+  bool _strictTabSwitching = false;
+  bool _negativeMarking = false;
+  bool _hideSolutions = false;
   int _maxAttempts = 3;
   bool _isScheduled = false;
   DateTime? _startDate;
@@ -69,7 +71,11 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
     _allowRetake = exam.allowRetake;
     _maxAttempts = widget.existingExam!.maxAttempts;
     _isScheduled = widget.existingExam!.isScheduled;
-    _useFaceProctoring = widget.existingExam!.useFaceProctoring;
+    _useFaceProctoring = widget.existingExam!.useFaceProctoring || widget.existingExam!.isProctoringEnabled;
+    _isAudioProctoringEnabled = widget.existingExam!.isAudioProctoringEnabled;
+    _strictTabSwitching = widget.existingExam!.strictTabSwitching;
+    _negativeMarking = widget.existingExam!.negativeMarking;
+    _hideSolutions = widget.existingExam!.hideSolutions;
     _startDate = widget.existingExam!.startDate;
     _endDate = exam.endDate;
     _questions = List.from(exam.questions);
@@ -160,7 +166,7 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              value: _examType,
+              initialValue: _examType,
               decoration: const InputDecoration(
                 labelText: 'Exam Type',
                 border: OutlineInputBorder(),
@@ -235,6 +241,67 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
             const SizedBox(height: 16),
             const Divider(),
             const SizedBox(height: 8),
+            // ── PROCTORING SECTION ──
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('🛡 Proctoring & Security', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.indigo[700])),
+            ),
+            FeatureGate(
+              featureKey: 'aiAssessment',
+              showLockOverlay: true,
+              child: Column(
+                children: [
+                  SwitchListTile(
+                    title: const Text('Visual AI Proctoring'),
+                    subtitle: const Text('Requires webcam. Flags absence & multiple faces.'),
+                    value: _useFaceProctoring,
+                    onChanged: (value) => setState(() => _useFaceProctoring = value),
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.visibility, color: Colors.indigo),
+                  ),
+                  SwitchListTile(
+                    title: const Text('Audio & Gaze Proctoring'),
+                    subtitle: const Text('Requires mic. Flags noise & looking away/down.'),
+                    value: _isAudioProctoringEnabled,
+                    onChanged: (value) => setState(() => _isAudioProctoringEnabled = value),
+                    contentPadding: EdgeInsets.zero,
+                    secondary: const Icon(Icons.mic, color: Colors.indigo),
+                  ),
+                ],
+              ),
+            ),
+            SwitchListTile(
+              title: const Text('Strict Environment Lock'),
+              subtitle: const Text('Auto-submits exam after 5 tab switches.'),
+              value: _strictTabSwitching,
+              onChanged: (value) => setState(() => _strictTabSwitching = value),
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.security, color: Colors.red),
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            // ── SCORING RULES SECTION ──
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('📊 Scoring Rules', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.orange[800])),
+            ),
+            SwitchListTile(
+              title: const Text('Negative Marking'),
+              subtitle: const Text('Deduct points for incorrect answers'),
+              value: _negativeMarking,
+              onChanged: (value) => setState(() => _negativeMarking = value),
+              contentPadding: EdgeInsets.zero,
+              secondary: const Icon(Icons.warning_amber, color: Colors.orange),
+            ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            // ── EXAM EXPERIENCE SECTION ──
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('🎯 Exam Experience', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.teal[700])),
+            ),
             SwitchListTile(
               title: const Text('Shuffle Questions'),
               subtitle: const Text('Randomize question order'),
@@ -249,18 +316,33 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
               onChanged: (value) => setState(() => _shuffleOptions = value),
               contentPadding: EdgeInsets.zero,
             ),
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            // ── POST-EXAM REVIEW SECTION ──
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text('📋 Post-Exam Review', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.blue[700])),
+            ),
             SwitchListTile(
               title: const Text('Show Result Immediately'),
-              subtitle: const Text('After submission'),
+              subtitle: const Text('Display score after submission'),
               value: _showResultImmediately,
               onChanged: (value) => setState(() => _showResultImmediately = value),
               contentPadding: EdgeInsets.zero,
             ),
             SwitchListTile(
               title: const Text('Show Correct Answers'),
-              subtitle: const Text('After submission'),
+              subtitle: const Text('Reveal correct options during review'),
               value: _showCorrectAnswers,
               onChanged: (value) => setState(() => _showCorrectAnswers = value),
+              contentPadding: EdgeInsets.zero,
+            ),
+            SwitchListTile(
+              title: const Text('Hide Detailed Solutions'),
+              subtitle: const Text('Do not show explanations to students'),
+              value: _hideSolutions,
+              onChanged: (value) => setState(() => _hideSolutions = value),
               contentPadding: EdgeInsets.zero,
             ),
             SwitchListTile(
@@ -292,17 +374,6 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
               value: _isScheduled,
               onChanged: (value) => setState(() => _isScheduled = value),
               contentPadding: EdgeInsets.zero,
-            ),
-            FeatureGate(
-              featureKey: 'aiAssessment',
-              showLockOverlay: true,
-              child: SwitchListTile(
-                title: const Text('Enable AI Proctoring'),
-                subtitle: const Text('Requires camera and mic access'),
-                value: _useFaceProctoring,
-                onChanged: (value) => setState(() => _useFaceProctoring = value),
-                contentPadding: EdgeInsets.zero,
-              ),
             ),
             if (_isScheduled) ...[
               const SizedBox(height: 12),
@@ -568,7 +639,7 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
                     )),
                 const SizedBox(height: 8),
                 DropdownButtonFormField<String>(
-                  value: difficulty,
+                  initialValue: difficulty,
                   decoration: const InputDecoration(labelText: 'Difficulty', border: OutlineInputBorder(), isDense: true),
                   items: const [
                     DropdownMenuItem(value: 'easy', child: Text('Easy')),
@@ -650,7 +721,7 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
                 children: [
                   Expanded(
                     child: DropdownButtonFormField<int>(
-                      value: count,
+                      initialValue: count,
                       decoration: const InputDecoration(labelText: 'Count', border: OutlineInputBorder(), isDense: true),
                       items: [5, 10, 15, 20].map((n) => DropdownMenuItem(value: n, child: Text('$n'))).toList(),
                       onChanged: (v) => setDialogState(() => count = v!),
@@ -659,7 +730,7 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: DropdownButtonFormField<String>(
-                      value: difficulty,
+                      initialValue: difficulty,
                       decoration: const InputDecoration(labelText: 'Difficulty', border: OutlineInputBorder(), isDense: true),
                       items: const [
                         DropdownMenuItem(value: 'easy', child: Text('Easy')),
@@ -761,7 +832,11 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
           showCorrectAnswers: _showCorrectAnswers,
           allowRetake: _allowRetake,
           maxAttempts: _maxAttempts,
-          useFaceProctoring: _useFaceProctoring,
+          isProctoringEnabled: _useFaceProctoring,
+          isAudioProctoringEnabled: _isAudioProctoringEnabled,
+          strictTabSwitching: _strictTabSwitching,
+          negativeMarking: _negativeMarking,
+          hideSolutions: _hideSolutions,
           startDate: _startDate,
           endDate: _endDate,
         );
@@ -781,7 +856,11 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
             'showResultImmediately': _showResultImmediately,
             'showCorrectAnswers': _showCorrectAnswers,
             'allowRetake': _allowRetake,
-            'useFaceProctoring': _useFaceProctoring,
+            'isProctoringEnabled': _useFaceProctoring,
+            'isAudioProctoringEnabled': _isAudioProctoringEnabled,
+            'strictTabSwitching': _strictTabSwitching,
+            'negativeMarking': _negativeMarking,
+            'hideSolutions': _hideSolutions,
             'maxAttempts': _allowRetake ? _maxAttempts : 1,
             'startDate': _startDate?.toIso8601String(),
             'endDate': _endDate?.toIso8601String(),

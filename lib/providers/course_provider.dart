@@ -22,19 +22,21 @@ class CourseProvider with ChangeNotifier {
     bool? isFree,
     String? search,
     String? tutorId,
+    String? scope,
   }) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      print('📱 CourseProvider: Fetching courses...');
+      print('📱 CourseProvider: Fetching courses with scope: $scope...');
       _courses = await CourseService.getAllCourses(
         categoryId: categoryId,
         level: level,
         isFree: isFree,
         search: search,
         tutorId: tutorId,
+        scope: scope,
       );
       _filteredCourses = [];
       print('✅ CourseProvider: ${_courses.length} courses loaded');

@@ -10,6 +10,7 @@ class TutorService {
     double? minRating,
     double? maxRate,
     String? search,
+    String? scope,
   }) async {
     try {
       Map<String, String> queryParams = {};
@@ -18,10 +19,14 @@ class TutorService {
       if (minRating != null) queryParams['minRating'] = minRating.toString();
       if (maxRate != null) queryParams['maxRate'] = maxRate.toString();
       if (search != null) queryParams['search'] = search;
+      if (scope != null) queryParams['scope'] = scope;
+
+      final token = await AuthService.getToken();
 
       final response = await ApiService.get(
         ApiConfig.tutorsEndpoint,
         queryParams: queryParams,
+        token: token,
       );
 
       if (response['success']) {

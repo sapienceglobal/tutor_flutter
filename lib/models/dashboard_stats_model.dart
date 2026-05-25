@@ -1,310 +1,153 @@
-class DashboardStatsModel {
-  final CourseStats courses;
-  final StudentStats students;
-  final AppointmentStats appointments;
-  final RatingStats rating;
-  final RevenueStats revenue;
+class StudentDashboardStats {
+  final int enrolledCourses;
+  final int completedCourses;
+  final int inProgressCourses;
+  final int liveClassesToday;
+  final double averageScore;
+  final List<ChartDataPoint> performanceHistory;
+  final List<Announcement> recentAnnouncements;
+  final List<dynamic> todayExams;
 
-  DashboardStatsModel({
-    required this.courses,
-    required this.students,
-    required this.appointments,
-    required this.rating,
-    required this.revenue,
+  StudentDashboardStats({
+    required this.enrolledCourses,
+    required this.completedCourses,
+    required this.inProgressCourses,
+    required this.liveClassesToday,
+    required this.averageScore,
+    required this.performanceHistory,
+    required this.recentAnnouncements,
+    required this.todayExams,
   });
 
-  factory DashboardStatsModel.fromJson(Map<String, dynamic> json) {
-    try {
-      return DashboardStatsModel(
-        courses: CourseStats.fromJson(json['courses'] ?? {}),
-        students: StudentStats.fromJson(json['students'] ?? {}),
-        appointments: AppointmentStats.fromJson(json['appointments'] ?? {}),
-        rating: RatingStats.fromJson(json['rating'] ?? {}),
-        revenue: RevenueStats.fromJson(json['revenue'] ?? {}),
-      );
-    } catch (e) {
-      print('❌ Error parsing DashboardStatsModel: $e');
-      rethrow;
-    }
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'courses': courses.toJson(),
-      'students': students.toJson(),
-      'appointments': appointments.toJson(),
-      'rating': rating.toJson(),
-      'revenue': revenue.toJson(),
-    };
-  }
-}
-
-class CourseStats {
-  final int total;
-  final int published;
-  final int draft;
-
-  CourseStats({
-    required this.total,
-    required this.published,
-    required this.draft,
-  });
-
-  factory CourseStats.fromJson(Map<String, dynamic> json) {
-    return CourseStats(
-      total: json['total'] ?? 0,
-      published: json['published'] ?? 0,
-      draft: json['draft'] ?? 0,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'total': total,
-      'published': published,
-      'draft': draft,
-    };
-  }
-}
-
-class StudentStats {
-  final int total;
-  final int recentEnrollments;
-
-  StudentStats({
-    required this.total,
-    required this.recentEnrollments,
-  });
-
-  factory StudentStats.fromJson(Map<String, dynamic> json) {
-    return StudentStats(
-      total: json['total'] ?? 0,
-      recentEnrollments: json['recentEnrollments'] ?? 0,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'total': total,
-      'recentEnrollments': recentEnrollments,
-    };
-  }
-}
-
-class AppointmentStats {
-  final int total;
-  final int upcoming;
-  final int completed;
-
-  AppointmentStats({
-    required this.total,
-    required this.upcoming,
-    required this.completed,
-  });
-
-  factory AppointmentStats.fromJson(Map<String, dynamic> json) {
-    return AppointmentStats(
-      total: json['total'] ?? 0,
-      upcoming: json['upcoming'] ?? 0,
-      completed: json['completed'] ?? 0,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'total': total,
-      'upcoming': upcoming,
-      'completed': completed,
-    };
-  }
-}
-
-class RatingStats {
-  final double average;
-  final int totalReviews;
-
-  RatingStats({
-    required this.average,
-    required this.totalReviews,
-  });
-
-  factory RatingStats.fromJson(Map<String, dynamic> json) {
-    return RatingStats(
-      average: (json['average'] ?? 0).toDouble(),
-      totalReviews: json['totalReviews'] ?? 0,
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'average': average,
-      'totalReviews': totalReviews,
-    };
-  }
-}
-
-class RevenueStats {
-  final double total;
-
-  RevenueStats({required this.total});
-
-  factory RevenueStats.fromJson(Map<String, dynamic> json) {
-    return RevenueStats(
-      total: (json['total'] ?? 0).toDouble(),
-    );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'total': total,
-    };
-  }
-}
-
-// ✅ Activity Models (for Recent Activities)
-class ActivityModel {
-  final List<EnrollmentActivity> enrollments;
-  final List<AppointmentActivity> appointments;
-
-  ActivityModel({
-    required this.enrollments,
-    required this.appointments,
-  });
-
-  factory ActivityModel.fromJson(Map<String, dynamic> json) {
-    return ActivityModel(
-      enrollments: (json['enrollments'] as List?)
-              ?.map((e) => EnrollmentActivity.fromJson(e))
-              .toList() ??
-          [],
-      appointments: (json['appointments'] as List?)
-              ?.map((a) => AppointmentActivity.fromJson(a))
-              .toList() ??
-          [],
+  factory StudentDashboardStats.fromJson(Map<String, dynamic> json) {
+    return StudentDashboardStats(
+      enrolledCourses: json['enrolledCourses'] ?? 0,
+      completedCourses: json['completedCourses'] ?? 0,
+      inProgressCourses: json['inProgress'] ?? 0,
+      liveClassesToday: json['liveClassesToday'] ?? 0,
+      averageScore: (json['averageScore'] ?? 0).toDouble(),
+      performanceHistory: (json['activity'] as List? ?? [])
+          .map((item) => ChartDataPoint.fromJson(item))
+          .toList(),
+      recentAnnouncements: (json['announcements'] as List? ?? [])
+          .map((item) => Announcement.fromJson(item))
+          .toList(),
+      todayExams: json['todayExams'] ?? [],
     );
   }
 }
 
-class EnrollmentActivity {
-  final String studentName;
-  final String studentImage;
-  final String courseName;
-  final DateTime enrolledAt;
-
-  EnrollmentActivity({
-    required this.studentName,
-    required this.studentImage,
-    required this.courseName,
-    required this.enrolledAt,
-  });
-
-  factory EnrollmentActivity.fromJson(Map<String, dynamic> json) {
-    return EnrollmentActivity(
-      studentName: json['studentId']?['name'] ?? 'Unknown',
-      studentImage: json['studentId']?['profileImage'] ??
-          'https://via.placeholder.com/150',
-      courseName: json['courseId']?['title'] ?? 'Unknown Course',
-      enrolledAt: json['enrolledAt'] != null
-          ? DateTime.parse(json['enrolledAt'])
-          : DateTime.now(),
-    );
-  }
-}
-
-class AppointmentActivity {
-  final String studentName;
-  final String studentImage;
-  final DateTime dateTime;
-  final String status;
-
-  AppointmentActivity({
-    required this.studentName,
-    required this.studentImage,
-    required this.dateTime,
-    required this.status,
-  });
-
-  factory AppointmentActivity.fromJson(Map<String, dynamic> json) {
-    return AppointmentActivity(
-      studentName: json['studentId']?['name'] ?? 'Unknown',
-      studentImage: json['studentId']?['profileImage'] ??
-          'https://via.placeholder.com/150',
-      dateTime: json['dateTime'] != null
-          ? DateTime.parse(json['dateTime'])
-          : DateTime.now(),
-      status: json['status'] ?? 'pending',
-    );
-  }
-}
-
-// ✅ Earnings Models
-class EarningsModel {
-  final List<CourseEarning> byCourse;
-  final List<MonthlyEarning> monthly;
-  final double total;
-
-  EarningsModel({
-    required this.byCourse,
-    required this.monthly,
-    required this.total,
-  });
-
-  factory EarningsModel.fromJson(Map<String, dynamic> json) {
-    return EarningsModel(
-      byCourse: (json['byCourse'] as List?)
-              ?.map((c) => CourseEarning.fromJson(c))
-              .toList() ??
-          [],
-      monthly: (json['monthly'] as List?)
-              ?.map((m) => MonthlyEarning.fromJson(m))
-              .toList() ??
-          [],
-      total: (json['total'] ?? 0).toDouble(),
-    );
-  }
-}
-
-class CourseEarning {
-  final String courseId;
-  final String title;
-  final int enrollments;
-  final double price;
+class TutorDashboardStats {
+  final int totalStudents;
+  final int activeCourses;
+  final int upcomingClasses;
   final double totalEarnings;
+  final Map<String, dynamic> trends;
+  final List<ChartDataPoint> weeklyPerformance;
+  final List<StudentActivity> recentActivity;
+  final List<Announcement> announcements;
+  final Map<String, dynamic> actionQueue;
 
-  CourseEarning({
-    required this.courseId,
-    required this.title,
-    required this.enrollments,
-    required this.price,
+  TutorDashboardStats({
+    required this.totalStudents,
+    required this.activeCourses,
+    required this.upcomingClasses,
     required this.totalEarnings,
+    required this.trends,
+    required this.weeklyPerformance,
+    required this.recentActivity,
+    required this.announcements,
+    required this.actionQueue,
   });
 
-  factory CourseEarning.fromJson(Map<String, dynamic> json) {
-    return CourseEarning(
-      courseId: json['courseId'] ?? '',
-      title: json['title'] ?? '',
-      enrollments: json['enrollments'] ?? 0,
-      price: (json['price'] ?? 0).toDouble(),
+  factory TutorDashboardStats.fromJson(Map<String, dynamic> json) {
+    return TutorDashboardStats(
+      totalStudents: json['totalStudents'] ?? 0,
+      activeCourses: json['activeCourses'] ?? 0,
+      upcomingClasses: json['upcomingClassesCount'] ?? 0,
       totalEarnings: (json['totalEarnings'] ?? 0).toDouble(),
+      trends: json['trends'] ?? {},
+      weeklyPerformance: (json['weeklyPerformance'] as List? ?? [])
+          .map((item) => ChartDataPoint.fromJson(item))
+          .toList(),
+      recentActivity: (json['recentStudentActivity'] as List? ?? [])
+          .map((item) => StudentActivity.fromJson(item))
+          .toList(),
+      announcements: (json['recentAnnouncements'] as List? ?? [])
+          .map((item) => Announcement.fromJson(item))
+          .toList(),
+      actionQueue: {
+        'pendingAssignments': json['pendingAssignmentReviews'] ?? 0,
+        'unreadNotifications': json['unreadNotificationsCount'] ?? 0,
+      },
     );
   }
 }
 
-class MonthlyEarning {
-  final DateTime month;
-  final double earnings;
+class ChartDataPoint {
+  final String label;
+  final double value;
+  final double? secondaryValue;
 
-  MonthlyEarning({
-    required this.month,
-    required this.earnings,
+  ChartDataPoint({required this.label, required this.value, this.secondaryValue});
+
+  factory ChartDataPoint.fromJson(Map<String, dynamic> json) {
+    return ChartDataPoint(
+      label: json['month'] ?? json['name'] ?? '',
+      value: (json['score'] ?? json['enrollments'] ?? 0).toDouble(),
+      secondaryValue: (json['completions'] ?? 0).toDouble(),
+    );
+  }
+}
+
+class StudentActivity {
+  final String studentName;
+  final String? studentImage;
+  final String courseName;
+  final int score;
+  final String lastActivity;
+
+  StudentActivity({
+    required this.studentName,
+    this.studentImage,
+    required this.courseName,
+    required this.score,
+    required this.lastActivity,
   });
 
-  factory MonthlyEarning.fromJson(Map<String, dynamic> json) {
-    return MonthlyEarning(
-      month: json['month'] != null
-          ? DateTime.parse(json['month'])
-          : DateTime.now(),
-      earnings: (json['earnings'] ?? 0).toDouble(),
+  factory StudentActivity.fromJson(Map<String, dynamic> json) {
+    return StudentActivity(
+      studentName: json['studentName'] ?? 'Student',
+      studentImage: json['studentImage'],
+      courseName: json['courseName'] ?? '',
+      score: json['score'] ?? 0,
+      lastActivity: json['lastActivity'] ?? '',
+    );
+  }
+}
+
+class Announcement {
+  final String id;
+  final String title;
+  final String message;
+  final String? courseTitle;
+  final DateTime createdAt;
+
+  Announcement({
+    required this.id,
+    required this.title,
+    required this.message,
+    this.courseTitle,
+    required this.createdAt,
+  });
+
+  factory Announcement.fromJson(Map<String, dynamic> json) {
+    return Announcement(
+      id: json['id'] ?? json['_id'] ?? '',
+      title: json['title'] ?? '',
+      message: json['message'] ?? '',
+      courseTitle: json['courseTitle'],
+      createdAt: json['createdAt'] != null ? DateTime.parse(json['createdAt']) : DateTime.now(),
     );
   }
 }

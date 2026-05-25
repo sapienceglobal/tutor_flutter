@@ -1,17 +1,26 @@
 import 'package:flutter/material.dart';
 
 class AppColors {
-  static const Color primary = Color(0xFF2196F3);
+  static const Color primary = Color(0xFF6B4DF1); // Updated to match premium theme
   static const Color accent = Color(0xFFFF9800);
-  static const Color background = Color(0xFFF5F5F5);
-  static const Color success = Color(0xFF4CAF50);
-  static const Color error = Color(0xFFF44336);
-  static const Color warning = Color(0xFFFFC107);
+  static const Color background = Color(0xFFF8F9FE); // Slightly lighter/cleaner
+  static const Color surface = Colors.white;
+  static const Color success = Color(0xFF10B981);
+  static const Color error = Color(0xFFEF4444);
+  static const Color warning = Color(0xFFF59E0B);
+  static const Color textMain = Color(0xFF1E293B);
+  static const Color textMuted = Color(0xFF64748B);
+  
+  static const Gradient primaryGradient = LinearGradient(
+    colors: [Color(0xFF6B4DF1), Color(0xFF8B73F7)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 }
 
 class AppStrings {
-  static const String appName = 'Tutor Management';
-  static const String learnAtYourPace = 'Learn at Your Own Pace';
+  static const String appName = 'Sapience LMS';
+  static const String learnAtYourPace = 'Empowering Education Everywhere';
 
   // English
   static const Map<String, String> en = {

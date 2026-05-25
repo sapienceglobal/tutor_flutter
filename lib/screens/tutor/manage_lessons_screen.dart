@@ -329,7 +329,7 @@ class _ManageLessonsScreenState extends State<ManageLessonsScreen> {
                       ),
                       const SizedBox(height: 12),
                       DropdownButtonFormField<String>(
-                        value: lessonType,
+                        initialValue: lessonType,
                         decoration: const InputDecoration(
                           labelText: 'Lesson Type',
                           border: OutlineInputBorder(),

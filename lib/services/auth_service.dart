@@ -258,6 +258,10 @@ class AuthService {
     return prefs.getString(_tokenKey);
   }
 
+  static Future<String?> getApiKey() async {
+    return ApiService.apiKey;
+  }
+
   // Get saved user
   static Future<UserModel?> getSavedUser() async {
     try {

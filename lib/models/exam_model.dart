@@ -93,6 +93,11 @@ class ExamModel {
   final DateTime? endDate;
   final bool isScheduled;
   final bool useFaceProctoring;
+  final bool isProctoringEnabled;
+  final bool isAudioProctoringEnabled;
+  final bool strictTabSwitching;
+  final bool negativeMarking;
+  final bool hideSolutions;
   final String status;
   final bool isPublished;
   final int attemptCount;
@@ -126,6 +131,11 @@ class ExamModel {
     this.endDate,
     this.isScheduled = false,
     this.useFaceProctoring = false,
+    this.isProctoringEnabled = false,
+    this.isAudioProctoringEnabled = false,
+    this.strictTabSwitching = false,
+    this.negativeMarking = false,
+    this.hideSolutions = false,
     this.status = 'draft',
     this.isPublished = false,
     this.attemptCount = 0,
@@ -166,7 +176,12 @@ class ExamModel {
       endDate:
           json['endDate'] != null ? DateTime.parse(json['endDate']) : null,
       isScheduled: json['isScheduled'] ?? false,
-      useFaceProctoring: json['useFaceProctoring'] ?? false,
+      useFaceProctoring: json['useFaceProctoring'] ?? json['isProctoringEnabled'] ?? false,
+      isProctoringEnabled: json['isProctoringEnabled'] ?? json['useFaceProctoring'] ?? false,
+      isAudioProctoringEnabled: json['isAudioProctoringEnabled'] ?? false,
+      strictTabSwitching: json['strictTabSwitching'] ?? false,
+      negativeMarking: json['negativeMarking'] ?? false,
+      hideSolutions: json['hideSolutions'] ?? false,
       status: json['status'] ?? 'draft',
       isPublished: json['isPublished'] ?? false,
       attemptCount: json['attemptCount'] ?? 0,
@@ -207,6 +222,11 @@ class ExamModel {
       'endDate': endDate?.toIso8601String(),
       'isScheduled': isScheduled,
       'useFaceProctoring': useFaceProctoring,
+      'isProctoringEnabled': isProctoringEnabled,
+      'isAudioProctoringEnabled': isAudioProctoringEnabled,
+      'strictTabSwitching': strictTabSwitching,
+      'negativeMarking': negativeMarking,
+      'hideSolutions': hideSolutions,
       'status': status,
       'isPublished': isPublished,
       'attemptCount': attemptCount,

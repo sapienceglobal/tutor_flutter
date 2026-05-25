@@ -1,4 +1,6 @@
 // exam_service.dart
+import '../config/api_config.dart';
+
 import '../models/exam_model.dart';
 import 'api_service.dart';
 import 'auth_service.dart';
@@ -63,7 +65,11 @@ class ExamService {
     bool showCorrectAnswers = true,
     bool allowRetake = false,
     int maxAttempts = 1,
-    bool useFaceProctoring = false,
+    bool isProctoringEnabled = false,
+    bool isAudioProctoringEnabled = false,
+    bool strictTabSwitching = false,
+    bool negativeMarking = false,
+    bool hideSolutions = false,
     DateTime? startDate,
     DateTime? endDate,
   }) async {
@@ -87,7 +93,11 @@ class ExamService {
           'showCorrectAnswers': showCorrectAnswers,
           'allowRetake': allowRetake,
           'maxAttempts': maxAttempts,
-          'useFaceProctoring': useFaceProctoring,
+          'isProctoringEnabled': isProctoringEnabled,
+          'isAudioProctoringEnabled': isAudioProctoringEnabled,
+          'strictTabSwitching': strictTabSwitching,
+          'negativeMarking': negativeMarking,
+          'hideSolutions': hideSolutions,
           if (startDate != null) 'startDate': startDate.toIso8601String(),
           if (endDate != null) 'endDate': endDate.toIso8601String(),
         },
@@ -142,6 +152,8 @@ class ExamService {
     required List<Map<String, dynamic>> answers,
     required int timeSpent,
     required DateTime startedAt,
+    int tabSwitchCount = 0,
+    List<Map<String, dynamic>> proctoringEvents = const [],
   }) async {
     try {
       final token = await AuthService.getToken();
@@ -152,6 +164,8 @@ class ExamService {
           'answers': answers,
           'timeSpent': timeSpent,
           'startedAt': startedAt.toIso8601String(),
+          'tabSwitchCount': tabSwitchCount,
+          'proctoringEvents': proctoringEvents,
         },
         token: token,
       );
@@ -163,13 +177,19 @@ class ExamService {
   }
 
   // Get all exams for student
-  static Future<Map<String, dynamic>> getAllStudentExams() async {
+  static Future<Map<String, dynamic>> getAllStudentExams({String? scope}) async {
     try {
       final token = await AuthService.getToken();
 
+      Map<String, String>? queryParams;
+      if (scope != null) {
+        queryParams = {'scope': scope};
+      }
+
       final response = await ApiService.get(
-        '/student/exams/all',
+        '${ApiConfig.studentExamsEndpoint}/all',
         token: token,
+        queryParams: queryParams,
       );
 
       return response;

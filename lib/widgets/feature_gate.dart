@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/subscription_provider.dart';
-import '../utils/constants.dart';
 
 class FeatureGate extends StatelessWidget {
   final String featureKey;

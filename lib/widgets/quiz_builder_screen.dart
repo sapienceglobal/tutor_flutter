@@ -519,7 +519,7 @@ class _QuizBuilderScreenState extends State<QuizBuilderScreen> {
                     children: [
                       Expanded(
                         child: DropdownButtonFormField<int>(
-                          value: count,
+                          initialValue: count,
                           decoration: const InputDecoration(
                             labelText: 'Questions',
                             border: OutlineInputBorder(),
@@ -532,7 +532,7 @@ class _QuizBuilderScreenState extends State<QuizBuilderScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: DropdownButtonFormField<String>(
-                          value: difficulty,
+                          initialValue: difficulty,
                           decoration: const InputDecoration(
                             labelText: 'Difficulty',
                             border: OutlineInputBorder(),

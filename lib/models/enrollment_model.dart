@@ -49,7 +49,18 @@ class EnrollmentModel {
   factory EnrollmentModel.fromJson(Map<String, dynamic> json) {
     return EnrollmentModel(
       id: json['_id'] ?? '',
-      student: UserModel.fromJson(json['studentId'] ?? {}),
+      student: (json['studentId'] is Map<String, dynamic>)
+          ? UserModel.fromJson(json['studentId'])
+          : UserModel(
+              id: json['studentId']?.toString() ?? '',
+              name: 'Unknown Student',
+              email: '',
+              phone: '',
+              role: 'student',
+              profileImage: 'https://via.placeholder.com/150',
+              language: 'en',
+              notificationSettings: NotificationSettings(email: true, push: true, sms: false),
+            ),
       course: CourseModel.fromJson(json['courseId'] ?? {}),
       enrolledAt: json['enrolledAt'] != null
           ? DateTime.parse(json['enrolledAt'])

@@ -18,6 +18,7 @@ class TutorProvider with ChangeNotifier {
     double? minRating,
     double? maxRate,
     String? search,
+    String? scope,
   }) async {
     _isLoading = true;
     _error = null;
@@ -29,6 +30,7 @@ class TutorProvider with ChangeNotifier {
         minRating: minRating,
         maxRate: maxRate,
         search: search,
+        scope: scope,
       );
       _filteredTutors = [];
     } catch (e) {

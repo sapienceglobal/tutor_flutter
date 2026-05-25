@@ -77,7 +77,7 @@ class _TutorStudentsScreenState extends State<TutorStudentsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               child: DropdownButtonFormField<String>(
-                value: _selectedCourseId,
+                initialValue: _selectedCourseId,
                 decoration: InputDecoration(
                   labelText: 'Filter by Course',
                   prefixIcon: const Icon(Icons.school),

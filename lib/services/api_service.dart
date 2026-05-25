@@ -16,32 +16,32 @@ class ApiService {
     return headers;
   }
 
+  // Common wrapper to handle logs and exceptions
+  static Future<Map<String, dynamic>> _call(Future<http.Response> Function() call) async {
+    try {
+      final response = await call();
+      return _handleResponse(response);
+    } catch (e) {
+      print("Network error: $e");
+      if (e is ApiException) rethrow;
+      throw Exception('Network error: $e');
+    }
+  }
+
   // GET
   static Future<Map<String, dynamic>> get(
     String endpoint, {
     String? token,
     Map<String, String>? queryParams,
   }) async {
-    try {
-      String url = '${ApiConfig.baseUrl}$endpoint';
-
-      if (queryParams != null && queryParams.isNotEmpty) {
-        final query = queryParams.entries
-            .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
-            .join('&');
-        url = '$url?$query';
-      }
-
-      final response = await http.get(
-        Uri.parse(url),
-        headers: _getHeaders(token: token),
-      );
-
-      return _handleResponse(response);
-    } catch (e) {
-      print("Network error: $e");
-      throw Exception('Network error: $e');
+    String url = '${ApiConfig.baseUrl}$endpoint';
+    if (queryParams != null && queryParams.isNotEmpty) {
+      final query = queryParams.entries
+          .map((e) => '${e.key}=${Uri.encodeComponent(e.value)}')
+          .join('&');
+      url = '$url?$query';
     }
+    return _call(() => http.get(Uri.parse(url), headers: _getHeaders(token: token)));
   }
 
   // POST
@@ -50,17 +50,11 @@ class ApiService {
     required Map<String, dynamic> body,
     String? token,
   }) async {
-    try {
-      final response = await http.post(
-        Uri.parse('${ApiConfig.baseUrl}$endpoint'),
-        headers: _getHeaders(token: token),
-        body: jsonEncode(body),
-      );
-
-      return _handleResponse(response);
-    } catch (e) {
-      throw Exception('Network error: $e');
-    }
+    return _call(() => http.post(
+      Uri.parse('${ApiConfig.baseUrl}$endpoint'),
+      headers: _getHeaders(token: token),
+      body: jsonEncode(body),
+    ));
   }
 
   // PUT 
@@ -69,17 +63,11 @@ class ApiService {
     required Map<String, dynamic> body,
     String? token,
   }) async {
-    try {
-      final response = await http.put(
-        Uri.parse('${ApiConfig.baseUrl}$endpoint'),
-        headers: _getHeaders(token: token),
-        body: jsonEncode(body),
-      );
-
-      return _handleResponse(response);
-    } catch (e) {
-      throw Exception('Network error: $e');
-    }
+    return _call(() => http.put(
+      Uri.parse('${ApiConfig.baseUrl}$endpoint'),
+      headers: _getHeaders(token: token),
+      body: jsonEncode(body),
+    ));
   }
 
   // PATCH
@@ -88,17 +76,11 @@ class ApiService {
     required Map<String, dynamic> body,
     String? token,
   }) async {
-    try {
-      final response = await http.patch(
-        Uri.parse('${ApiConfig.baseUrl}$endpoint'),
-        headers: _getHeaders(token: token),
-        body: jsonEncode(body),
-      );
-
-      return _handleResponse(response);
-    } catch (e) {
-      throw Exception('Network error: $e');
-    }
+    return _call(() => http.patch(
+      Uri.parse('${ApiConfig.baseUrl}$endpoint'),
+      headers: _getHeaders(token: token),
+      body: jsonEncode(body),
+    ));
   }
 
   // DELETE
@@ -106,16 +88,10 @@ class ApiService {
     String endpoint, {
     String? token,
   }) async {
-    try {
-      final response = await http.delete(
-        Uri.parse('${ApiConfig.baseUrl}$endpoint'),
-        headers: _getHeaders(token: token),
-      );
-
-      return _handleResponse(response);
-    } catch (e) {
-      throw Exception('Network error: $e');
-    }
+    return _call(() => http.delete(
+      Uri.parse('${ApiConfig.baseUrl}$endpoint'),
+      headers: _getHeaders(token: token),
+    ));
   }
 
   // RESPONSE HANDLER

@@ -30,49 +30,56 @@ class TutorModel {
     try {
       print('🔍 Parsing TutorModel: ${json['_id']}');
 
-      // ✅ Parse userId (can be object or string)
+      // ✅ Parse userId (can be object, string, or null) safely
       UserModel user;
       if (json['userId'] != null) {
         if (json['userId'] is Map<String, dynamic>) {
           user = UserModel.fromJson(json['userId']);
-        } else if (json['userId'] is String) {
+        } else {
           user = UserModel(
             id: json['userId'].toString(),
-            name: 'Unknown Tutor',
-            email: 'unknown@example.com',
+            name: 'Tutor',
+            email: '',
             phone: '',
             role: 'tutor',
             profileImage: 'https://via.placeholder.com/150',
-            language: 'en',
             notificationSettings: NotificationSettings(
               email: true,
               push: true,
               sms: false,
             ),
           );
-        } else {
-          throw Exception('Invalid userId type: ${json['userId'].runtimeType}');
         }
       } else {
-        throw Exception('userId is null');
+        user = UserModel(
+          id: '',
+          name: 'Tutor',
+          email: '',
+          phone: '',
+          role: 'tutor',
+          profileImage: 'https://via.placeholder.com/150',
+          notificationSettings: NotificationSettings(
+            email: true,
+            push: true,
+            sms: false,
+          ),
+        );
       }
 
-      // ✅ Parse categoryId (can be object or string)
+      // ✅ Parse categoryId (can be object, string, or null) safely
       CategoryModel category;
       if (json['categoryId'] != null) {
         if (json['categoryId'] is Map<String, dynamic>) {
           category = CategoryModel.fromJson(json['categoryId']);
-        } else if (json['categoryId'] is String) {
+        } else {
           category = CategoryModel(
             id: json['categoryId'].toString(),
-            name: 'Unknown',
+            name: 'Expertise',
             icon: '📚',
           );
-        } else {
-          throw Exception('Invalid categoryId type: ${json['categoryId'].runtimeType}');
         }
       } else {
-        throw Exception('categoryId is null');
+        category = CategoryModel(id: '', name: 'Expertise', icon: '📚');
       }
 
       // ✅ Parse subjects safely
@@ -101,7 +108,22 @@ class TutorModel {
     } catch (e) {
       print('❌ Error parsing TutorModel: $e');
       print('JSON Data: $json');
-      rethrow;
+      // Return a safe fallback rather than crashing the whole list
+      return TutorModel(
+        id: json['_id']?.toString() ?? '',
+        user: UserModel(
+          id: '',
+          name: 'Tutor',
+          email: '',
+          phone: '',
+          role: 'tutor',
+          profileImage: 'https://via.placeholder.com/150',
+          notificationSettings: NotificationSettings(email: true, push: true, sms: false),
+        ),
+        category: CategoryModel(id: '', name: 'Expertise', icon: '📚'),
+        hourlyRate: 0.0,
+        experience: 0,
+      );
     }
   }
 

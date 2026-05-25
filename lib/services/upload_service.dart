@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:my_app/config/api_config.dart';
 import 'dart:convert';
-import 'api_service.dart';
 import 'auth_service.dart';
 
 class UploadService {

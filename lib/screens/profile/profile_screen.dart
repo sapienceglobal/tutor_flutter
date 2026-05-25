@@ -11,6 +11,7 @@ import 'edit_profile_screen.dart';
 import 'change_password_screen.dart';
 import 'notification_settings_screen.dart';
 import 'language_settings_screen.dart';
+import '../admin/subscription/subscription_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -191,6 +192,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
                       localizations: localizations,
                       title: localizations.translate('settings'),
                       children: [
+                        if (user.role == 'admin' || user.role == 'superadmin')
+                          _buildActionTile(
+                            icon: Icons.workspace_premium,
+                            title: 'Subscription & Billing',
+                            onTap: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const SubscriptionScreen(),
+                                ),
+                              );
+                            },
+                          ),
                         _buildActionTile(
                           icon: Icons.notifications_outlined,
                           title: localizations.translate('notifications'),

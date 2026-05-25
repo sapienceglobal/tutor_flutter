@@ -177,7 +177,7 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
 
               // Category - ✅ FIXED
               DropdownButtonFormField<String>(
-                value: _selectedCategoryId,
+                initialValue: _selectedCategoryId,
                 decoration: InputDecoration(
                   labelText: 'Category',
                   prefixIcon: const Icon(Icons.category),
@@ -210,7 +210,7 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
 
               // Level
               DropdownButtonFormField<String>(
-                value: _selectedLevel,
+                initialValue: _selectedLevel,
                 decoration: InputDecoration(
                   labelText: 'Level',
                   prefixIcon: const Icon(Icons.signal_cellular_alt),
@@ -266,7 +266,7 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
 
               // Language
               DropdownButtonFormField<String>(
-                value: _selectedLanguage,
+                initialValue: _selectedLanguage,
                 decoration: InputDecoration(
                   labelText: 'Language',
                   prefixIcon: const Icon(Icons.language),
