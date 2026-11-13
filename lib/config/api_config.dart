@@ -7,9 +7,81 @@ class ApiConfig {
   // static const String baseUrl = 'http://195.35.20.207:4000/api';
   // 
   // Production (Hostinger VPS - Option B: Web Proxy via Port 5000 - recommended if port 4000 is firewalled):
-  static const String baseUrl = 'http://195.35.20.207:5000/api/proxy';
+  static const String baseUrl = 'https://yaadkaro.cloud/api/proxy';
   
-  static const String webUrl = 'http://195.35.20.207:5000'; // Frontend URL for WebViews
+  static const String webUrl = 'https://yaadkaro.cloud'; // Frontend URL for WebViews
+  static const String mediaBaseUrl = 'http://195.35.20.207:4000'; // Direct Backend Media Origin (/uploads)
+
+  static String get socketUrl {
+    return 'http://195.35.20.207:4000';
+  }
+
+  /// Resolves relative media paths (/uploads/..., uploads/..., /media/...) and upgrades http://res.cloudinary.com to https://
+  /// Identical to tutor-web/src/lib/mediaUrl.js so website & mobile app resolve media identically in production.
+  static String resolveMediaUrl(String? value) {
+    if (value == null) return '';
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return '';
+
+    if (trimmed.startsWith('blob:') || trimmed.startsWith('data:')) {
+      return trimmed;
+    }
+
+    if (trimmed.startsWith('//')) {
+      return 'https:$trimmed';
+    }
+
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      if (trimmed.toLowerCase().startsWith('http://res.cloudinary.com')) {
+        return trimmed.replaceFirst(RegExp(r'^http://', caseSensitive: false), 'https://');
+      }
+      return trimmed;
+    }
+
+    if (trimmed.startsWith('/')) {
+      return '$mediaBaseUrl$trimmed';
+    }
+
+    final lower = trimmed.toLowerCase();
+    if (lower.startsWith('uploads/') || lower.startsWith('media/')) {
+      return '$mediaBaseUrl/$trimmed';
+    }
+
+    return trimmed;
+  }
+
+  static bool _looksLikeMediaPath(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) return false;
+    final lower = trimmed.toLowerCase();
+    return lower.startsWith('blob:') ||
+        lower.startsWith('data:image/') ||
+        lower.startsWith('http://') ||
+        lower.startsWith('https://') ||
+        lower.startsWith('/uploads/') ||
+        lower.startsWith('uploads/') ||
+        lower.startsWith('/media/') ||
+        lower.startsWith('media/') ||
+        lower.contains('res.cloudinary.com');
+  }
+
+  /// Recursively normalizes media URLs inside JSON maps/lists returned by the backend.
+  static dynamic normalizeMediaUrlsDeep(dynamic input) {
+    if (input is List) {
+      return input.map((item) => normalizeMediaUrlsDeep(item)).toList();
+    }
+    if (input is Map) {
+      final Map<String, dynamic> output = {};
+      input.forEach((key, value) {
+        output[key.toString()] = normalizeMediaUrlsDeep(value);
+      });
+      return output;
+    }
+    if (input is String && _looksLikeMediaPath(input)) {
+      return resolveMediaUrl(input);
+    }
+    return input;
+  }
   // ─── Auth ───────────────────────────────────────────────
   static const String authEndpoint = '/auth';
 

@@ -18,7 +18,7 @@ class WishlistService {
     );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = ApiConfig.normalizeMediaUrlsDeep(json.decode(response.body));
       if (data['success'] == true) {
         final list = data['data'] ?? data['wishlist'];
         if (list == null) return [];

@@ -128,6 +128,7 @@ class CourseProvider with ChangeNotifier {
     bool requireApproval = false,
     int maxStudents = 0,
     String visibility = 'institute',
+    Map<String, dynamic>? audience,
   }) async {
     _isLoading = true;
     _error = null;
@@ -149,6 +150,7 @@ class CourseProvider with ChangeNotifier {
         requireApproval: requireApproval,
         maxStudents: maxStudents,
         visibility: visibility,
+        audience: audience,
       );
 
       if (response['success']) {

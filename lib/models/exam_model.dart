@@ -26,7 +26,7 @@ class ExamQuestion {
               .toList() ??
           [],
       explanation: json['explanation'],
-      points: json['points'] ?? 1,
+      points: (json['points'] as num?)?.toInt() ?? 1,
       difficulty: json['difficulty'] ?? 'medium',
       tags: (json['tags'] as List?)?.map((t) => t.toString()).toList() ?? [],
     );
@@ -106,6 +106,7 @@ class ExamModel {
   final String? aiPrompt;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final Map<String, dynamic>? audience;
 
   ExamModel({
     required this.id,
@@ -144,6 +145,7 @@ class ExamModel {
     this.aiPrompt,
     required this.createdAt,
     required this.updatedAt,
+    this.audience,
   });
 
   factory ExamModel.fromJson(Map<String, dynamic> json) {
@@ -155,21 +157,21 @@ class ExamModel {
       description: json['description'] ?? '',
       type: json['type'] ?? 'assessment',
       instructions: json['instructions'],
-      duration: json['duration'] ?? 0,
-      totalMarks: json['totalMarks'] ?? 0,
-      passingMarks: json['passingMarks'] ?? 0,
-      passingPercentage: json['passingPercentage'] ?? 70,
+      duration: (json['duration'] as num?)?.toInt() ?? 0,
+      totalMarks: (json['totalMarks'] as num?)?.toInt() ?? 0,
+      passingMarks: (json['passingMarks'] as num?)?.toInt() ?? 0,
+      passingPercentage: (json['passingPercentage'] as num?)?.toInt() ?? 70,
       questions: (json['questions'] as List?)
               ?.map((q) => ExamQuestion.fromJson(q))
               .toList() ??
           [],
-      totalQuestions: json['totalQuestions'] ?? 0,
+      totalQuestions: (json['totalQuestions'] as num?)?.toInt() ?? 0,
       shuffleQuestions: json['shuffleQuestions'] ?? false,
       shuffleOptions: json['shuffleOptions'] ?? false,
       showResultImmediately: json['showResultImmediately'] ?? false,
       showCorrectAnswers: json['showCorrectAnswers'] ?? true,
       allowRetake: json['allowRetake'] ?? false,
-      maxAttempts: json['maxAttempts'] ?? 1,
+      maxAttempts: (json['maxAttempts'] as num?)?.toInt() ?? 1,
       startDate: json['startDate'] != null
           ? DateTime.parse(json['startDate'])
           : null,
@@ -184,7 +186,7 @@ class ExamModel {
       hideSolutions: json['hideSolutions'] ?? false,
       status: json['status'] ?? 'draft',
       isPublished: json['isPublished'] ?? false,
-      attemptCount: json['attemptCount'] ?? 0,
+      attemptCount: (json['attemptCount'] as num?)?.toInt() ?? 0,
       averageScore: (json['averageScore'] ?? 0).toDouble(),
       isAIGenerated: json['isAIGenerated'] ?? false,
       aiPrompt: json['aiPrompt'],
@@ -194,6 +196,7 @@ class ExamModel {
       updatedAt: json['updatedAt'] != null
           ? DateTime.parse(json['updatedAt'])
           : DateTime.now(),
+      audience: json['audience'],
     );
   }
 
@@ -235,6 +238,7 @@ class ExamModel {
       'aiPrompt': aiPrompt,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      'audience': audience,
     };
   }
 }
@@ -274,15 +278,15 @@ class ExamAttempt {
       examId: json['examId'] ?? '',
       studentId: json['studentId'] ?? '',
       courseId: json['courseId'] ?? '',
-      attemptNumber: json['attemptNumber'] ?? 1,
+      attemptNumber: (json['attemptNumber'] as num?)?.toInt() ?? 1,
       answers: (json['answers'] as List?)
               ?.map((a) => AttemptAnswer.fromJson(a))
               .toList() ??
           [],
-      score: json['score'] ?? 0,
-      percentage: json['percentage'] ?? 0,
+      score: (json['score'] as num?)?.toInt() ?? 0,
+      percentage: (json['percentage'] as num?)?.toInt() ?? 0,
       isPassed: json['isPassed'] ?? false,
-      timeSpent: json['timeSpent'] ?? 0,
+      timeSpent: (json['timeSpent'] as num?)?.toInt() ?? 0,
       startedAt: DateTime.parse(json['startedAt']),
       submittedAt: DateTime.parse(json['submittedAt']),
     );
@@ -305,9 +309,9 @@ class AttemptAnswer {
   factory AttemptAnswer.fromJson(Map<String, dynamic> json) {
     return AttemptAnswer(
       questionId: json['questionId'] ?? '',
-      selectedOption: json['selectedOption'] ?? 0,
+      selectedOption: (json['selectedOption'] as num?)?.toInt() ?? 0,
       isCorrect: json['isCorrect'] ?? false,
-      pointsEarned: json['pointsEarned'] ?? 0,
+      pointsEarned: (json['pointsEarned'] as num?)?.toInt() ?? 0,
     );
   }
 

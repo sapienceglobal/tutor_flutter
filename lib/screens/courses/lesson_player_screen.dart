@@ -9,6 +9,7 @@ import '../../models/lesson_model.dart';
 import '../../utils/constants.dart';
 import '../../config/api_config.dart';
 import '../../services/enrollment_service.dart';
+import '../../widgets/sapience_ui.dart';
 
 class LessonPlayerScreen extends StatefulWidget {
   final LessonModel lesson;
@@ -33,6 +34,9 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
   String? _error;
   late final String? _videoUrl;
   int _initialPositionSec = 0;
+  int _selectedTab = 0;
+  bool _isCompleted = false;
+  bool _isMarkingComplete = false;
 
   String get _positionKey =>
       'lesson_pos_${widget.courseId}_${widget.lesson.id}';
@@ -40,14 +44,10 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    String? url = widget.lesson.content.videoUrl;
-    
-    if (url != null && url.startsWith('/')) {
-      final domain = ApiConfig.baseUrl.replaceAll('/api', '');
-      url = '$domain$url';
-    }
-    
-    _videoUrl = url;
+    final rawUrl = widget.lesson.content.videoUrl;
+    _videoUrl = (rawUrl != null && rawUrl.trim().isNotEmpty)
+        ? ApiConfig.resolveMediaUrl(rawUrl)
+        : null;
     _loadInitialPosition().then((_) => _initPlayer());
   }
 
@@ -73,7 +73,6 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
 
     try {
       if (_videoUrl == null) {
-        // no video url
         setState(() {
           _error = 'No video available for this lesson.';
           _isLoading = false;
@@ -82,7 +81,6 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
       }
 
       if (_isYouTubeUrl(_videoUrl)) {
-        // Use Youtube player
         final videoId = YoutubePlayer.convertUrlToId(_videoUrl);
         if (videoId == null) {
           setState(() {
@@ -104,10 +102,8 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
           ),
         );
 
-        // Wait until ready then seek to saved position
         _youtubeController!.addListener(_youtubeListener);
 
-        // If initial position exists, seek after a short delay when ready
         Future.delayed(const Duration(milliseconds: 500), () {
           if (_initialPositionSec > 0) {
             try {
@@ -122,14 +118,12 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
           _isLoading = false;
         });
       } else {
-        // Use VideoPlayer + Chewie for direct links
         _videoPlayerController = VideoPlayerController.networkUrl(
           Uri.parse(_videoUrl),
         );
 
         await _videoPlayerController!.initialize();
 
-        // seek to saved position if exists
         if (_initialPositionSec > 0) {
           final d = Duration(seconds: _initialPositionSec);
           if (d < _videoPlayerController!.value.duration) {
@@ -166,9 +160,7 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
     }
   }
 
-  void _youtubeListener() {
-    // placeholder if you want to track state changes
-  }
+  void _youtubeListener() {}
 
   @override
   void dispose() {
@@ -225,301 +217,688 @@ class _LessonPlayerScreenState extends State<LessonPlayerScreen> {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    } else if (mounted) {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Cannot open link.')));
     }
   }
 
+  Future<void> _markLessonComplete() async {
+    if (_isMarkingComplete) return;
+    setState(() => _isMarkingComplete = true);
+    try {
+      int pos = 0;
+      if (_youtubeController != null) {
+        pos = _youtubeController!.value.position.inSeconds;
+      } else if (_videoPlayerController != null) {
+        pos = _videoPlayerController!.value.position.inSeconds;
+      }
+
+      await EnrollmentService.updateProgress(
+        courseId: widget.courseId,
+        lessonId: widget.lesson.id,
+        watchedDuration: pos,
+        isCompleted: true,
+      );
+
+      if (!mounted) return;
+      setState(() => _isCompleted = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Lesson marked as complete!'),
+          backgroundColor: AppColors.secondary,
+        ),
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update progress: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isMarkingComplete = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
-        title: Text(
-          widget.lesson.title,
-          style: const TextStyle(color: Colors.white),
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'Open in external app',
-            onPressed: _openInExternal,
-            icon: const Icon(Icons.open_in_new),
-          ),
-          IconButton(
-            tooltip: 'Retry',
-            onPressed: _retry,
-            icon: const Icon(Icons.refresh),
-          ),
-        ],
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.white))
-          : _error != null
-          ? Center(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(_error!, style: const TextStyle(color: Colors.white)),
-                    const SizedBox(height: 12),
-                    ElevatedButton.icon(
-                      onPressed: _retry,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Retry'),
-                    ),
-                    const SizedBox(height: 8),
-                    ElevatedButton.icon(
-                      onPressed: _openInExternal,
-                      icon: const Icon(Icons.open_in_new),
-                      label: const Text('Open externally'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-          : Column(
-              children: [
-                // Player area
-                if (_youtubeController != null)
-                  YoutubePlayerBuilder(
-                    player: YoutubePlayer(
-                      controller: _youtubeController!,
-                      showVideoProgressIndicator: true,
-                      progressIndicatorColor: AppColors.primary,
-                      onReady: () {
-                        // ready
-                      },
-                    ),
-                    builder: (context, player) {
-                      return AspectRatio(aspectRatio: 16 / 9, child: player);
-                    },
-                  )
-                else if (_chewieController != null)
-                  AspectRatio(
-                    aspectRatio: _videoPlayerController!.value.aspectRatio > 0
-                        ? _videoPlayerController!.value.aspectRatio
-                        : 16 / 9,
-                    child: Chewie(controller: _chewieController!),
-                  )
-                else
-                  AspectRatio(
-                    aspectRatio: 16 / 9,
-                    child: Container(
-                      color: Colors.grey[900],
-                      child: const Center(
-                        child: Icon(
-                          Icons.play_circle_outline,
-                          size: 80,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
+    final attachments = widget.lesson.content.attachments;
+    final documents = widget.lesson.content.documents;
+
+    return SapienceBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              SapienceHeader(
+                title: widget.lesson.title,
+                actions: [
+                  _headerActionIcon(
+                    icon: Icons.open_in_new_rounded,
+                    tooltip: 'Open externally',
+                    onTap: _openInExternal,
                   ),
-
-                // Content below
-                Expanded(
-                  child: Container(
-                    color: Colors.white,
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Title
-                          Text(
-                            widget.lesson.title,
-                            style: const TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                            ),
+                  const SizedBox(width: 8),
+                  _headerActionIcon(
+                    icon: Icons.refresh_rounded,
+                    tooltip: 'Reload',
+                    onTap: _retry,
+                  ),
+                ],
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(16, 6, 16, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Rounded Video Player Frame matching PNG
+                      Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF0A142D),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: const [AppThemeDesign.cardShadow],
+                          border: Border.all(
+                            color: AppColors.border,
+                            width: 1,
                           ),
-                          const SizedBox(height: 8),
+                        ),
+                        clipBehavior: Clip.antiAlias,
+                        child: _buildPlayerBody(),
+                      ),
+                      const SizedBox(height: 14),
 
-                          // Type & Duration
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary.withOpacity(0.1),
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  widget.lesson.type.toUpperCase(),
-                                  style: TextStyle(
-                                    color: AppColors.primary,
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.bold,
+                      // Metadata Card
+                      SapienceCard(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    widget.lesson.title,
+                                    style: const TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.navyInk,
+                                      height: 1.25,
+                                    ),
                                   ),
                                 ),
-                              ),
-                              if (widget.lesson.content.duration != null) ...[
-                                const SizedBox(width: 12),
-                                const Icon(
-                                  Icons.access_time,
-                                  size: 16,
-                                  color: Colors.grey,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  '${(widget.lesson.content.duration! / 60).toStringAsFixed(0)} min',
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 16),
-
-                          // Description
-                          if (widget.lesson.description.isNotEmpty) ...[
-                            const Text(
-                              'Description',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              widget.lesson.description,
-                              style: TextStyle(
-                                fontSize: 14,
-                                color: Colors.grey[700],
-                                height: 1.5,
-                              ),
-                            ),
-                            const SizedBox(height: 24),
-                          ],
-
-                          // Attachments
-                          if (widget.lesson.content.attachments.isNotEmpty) ...[
-                            const Text(
-                              'Attachments',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            ...widget.lesson.content.attachments.map((
-                              attachment,
-                            ) {
-                              return Card(
-                                margin: const EdgeInsets.only(bottom: 8),
-                                child: ListTile(
-                                  leading: Icon(
-                                    Icons.attach_file,
-                                    color: AppColors.primary,
-                                  ),
-                                  title: Text(attachment.name),
-                                  subtitle: Text(attachment.type),
-                                  trailing: IconButton(
-                                    icon: const Icon(Icons.download),
-                                    onPressed: () {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        const SnackBar(
-                                          content: Text(
-                                            'Download feature coming soon!',
+                                if (_isCompleted) ...[
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.secondary.withOpacity(0.14),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: const [
+                                        Icon(
+                                          Icons.check_circle_rounded,
+                                          size: 14,
+                                          color: AppColors.secondary,
+                                        ),
+                                        SizedBox(width: 4),
+                                        Text(
+                                          'Completed',
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w800,
+                                            color: AppColors.secondary,
                                           ),
                                         ),
-                                      );
-                                    },
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 10,
+                                    vertical: 5,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.primaryTint,
+                                    borderRadius: BorderRadius.circular(20),
+                                  ),
+                                  child: Text(
+                                    widget.lesson.type.toUpperCase(),
+                                    style: const TextStyle(
+                                      color: AppColors.primary,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w800,
+                                    ),
                                   ),
                                 ),
-                              );
-                            }),
+                                if (widget.lesson.content.duration != null)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF3F6FD),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(
+                                          Icons.schedule_rounded,
+                                          size: 14,
+                                          color: AppColors.textSecondary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${(widget.lesson.content.duration! / 60).ceil()} min',
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: AppColors.navyInk,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                if (widget.lesson.isFree)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 5,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color:
+                                          AppColors.secondary.withOpacity(0.12),
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    child: const Text(
+                                      'FREE PREVIEW',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.secondary,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ],
-                          const SizedBox(height: 80), // spacing for bottom bar
-                        ],
+                        ),
                       ),
+                      const SizedBox(height: 14),
+
+                      SapienceSegmentedTabs(
+                        tabs: [
+                          'Overview',
+                          'Resources (${attachments.length + documents.length})',
+                        ],
+                        currentIndex: _selectedTab,
+                        onChanged: (i) => setState(() => _selectedTab = i),
+                      ),
+                      const SizedBox(height: 14),
+
+                      if (_selectedTab == 0)
+                        _buildOverviewSection()
+                      else
+                        _buildResourcesSection(attachments, documents),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(22)),
+              border: Border(top: BorderSide(color: AppColors.border)),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0E2960).withOpacity(0.08),
+                  blurRadius: 16,
+                  offset: const Offset(0, -4),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 4,
+                  child: SapienceButton(
+                    label: 'Back to Course',
+                    variant: SapienceButtonVariant.outlinedNavy,
+                    height: 48,
+                    fontSize: 13.5,
+                    onTap: () => Navigator.pop(context),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 5,
+                  child: SapienceButton(
+                    label: _isMarkingComplete
+                        ? 'Saving...'
+                        : _isCompleted
+                            ? 'Completed ✓'
+                            : 'Mark Complete',
+                    variant: _isCompleted
+                        ? SapienceButtonVariant.green
+                        : SapienceButtonVariant.greenToBlue,
+                    trailingIcon: _isCompleted
+                        ? Icons.check_rounded
+                        : Icons.check_circle_outline_rounded,
+                    height: 48,
+                    fontSize: 14,
+                    onTap: _isMarkingComplete ? null : _markLessonComplete,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _headerActionIcon({
+    required IconData icon,
+    required String tooltip,
+    required VoidCallback onTap,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+              boxShadow: const [AppThemeDesign.softShadow],
+            ),
+            child: Icon(icon, color: AppColors.navyInk, size: 19),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPlayerBody() {
+    if (_isLoading) {
+      return const AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Center(child: CircularProgressIndicator(color: Colors.white)),
+      );
+    }
+
+    if (_error != null) {
+      return AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 13),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: _retry,
+                    icon: const Icon(Icons.refresh_rounded, size: 17),
+                    label: const Text('Retry'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.white,
+                      foregroundColor: AppColors.navyInk,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _openInExternal,
+                    icon: const Icon(Icons.open_in_new_rounded, size: 17),
+                    label: const Text('Open External'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    if (_youtubeController != null) {
+      return YoutubePlayerBuilder(
+        player: YoutubePlayer(
+          controller: _youtubeController!,
+          showVideoProgressIndicator: true,
+          progressIndicatorColor: AppColors.primary,
+          onReady: () {},
+        ),
+        builder: (context, player) {
+          return AspectRatio(aspectRatio: 16 / 9, child: player);
+        },
+      );
+    }
+
+    if (_chewieController != null) {
+      return AspectRatio(
+        aspectRatio: _videoPlayerController!.value.aspectRatio > 0
+            ? _videoPlayerController!.value.aspectRatio
+            : 16 / 9,
+        child: Chewie(controller: _chewieController!),
+      );
+    }
+
+    return AspectRatio(
+      aspectRatio: 16 / 9,
+      child: Container(
+        decoration: const BoxDecoration(
+          gradient: AppThemeDesign.navyWaveGradient,
+        ),
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 64,
+                height: 64,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.16),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.menu_book_rounded,
+                  size: 32,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '${widget.lesson.type.toUpperCase()} LESSON',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13,
+                  letterSpacing: 0.6,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildOverviewSection() {
+    final desc = widget.lesson.description.trim();
+    return SapienceCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Lesson Summary',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: AppColors.navyInk,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            desc.isNotEmpty
+                ? desc
+                : 'Watch or review this lesson carefully, then mark it as complete when you finish.',
+            style: const TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+              height: 1.55,
+            ),
+          ),
+          const SizedBox(height: 14),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F6FD),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: const [
+                SapienceCheckBadge(size: 20),
+                SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Playback position is saved automatically on this device.',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.navyInk,
                     ),
                   ),
                 ),
               ],
             ),
-      bottomNavigationBar: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.2),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                onPressed: () {
-                  // TODO: go to previous lesson logic
-                },
-                child: const Text('Previous'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                onPressed: () async {
-                  try {
-                    int pos = 0;
-                    if (_youtubeController != null) {
-                      pos = _youtubeController!.value.position.inSeconds;
-                    } else if (_videoPlayerController != null) {
-                      pos = _videoPlayerController!.value.position.inSeconds;
-                    }
-
-                    await EnrollmentService.updateProgress(
-                      courseId: widget.courseId,
-                      lessonId: widget.lesson.id,
-                      watchedDuration: pos,
-                      isCompleted: true,
-                    );
-
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Lesson marked as complete! 🎉'),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                      // TODO: Navigate to next lesson
-                    }
-                  } catch (e) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Failed to update progress: $e'),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                ),
-                child: const Text('Complete & Next'),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
+  }
+
+  Widget _buildResourcesSection(
+    List<LessonAttachment> attachments,
+    List<DocumentData> documents,
+  ) {
+    if (attachments.isEmpty && documents.isEmpty) {
+      return SapienceCard(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            child: Column(
+              children: const [
+                Icon(
+                  Icons.folder_open_rounded,
+                  size: 38,
+                  color: AppColors.textMuted,
+                ),
+                SizedBox(height: 8),
+                Text(
+                  'No downloadable resources for this lesson.',
+                  style: TextStyle(
+                    fontSize: 13.5,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        ...documents.map(
+          (doc) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: SapienceTintedTile(
+              tone: SapienceTileTone.blue,
+              onTap: () => _openAttachmentUrl(doc.url),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.description_rounded,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          doc.name.isNotEmpty
+                              ? doc.name
+                              : 'Lesson Document / Slides',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: AppColors.navyInk,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          doc.type.isNotEmpty
+                              ? doc.type.toUpperCase()
+                              : 'Tap to open material',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.open_in_new_rounded,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        ...attachments.map(
+          (attachment) => Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: SapienceCard(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              onTap: () => _openAttachmentUrl(attachment.url),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryTint,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.attach_file_rounded,
+                      color: AppColors.primary,
+                      size: 20,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          attachment.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                            color: AppColors.navyInk,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          attachment.type.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryTint,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(
+                      Icons.download_rounded,
+                      color: AppColors.primary,
+                      size: 18,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _openAttachmentUrl(String rawUrl) async {
+    final resolved = ApiConfig.resolveMediaUrl(rawUrl);
+    if (resolved.isEmpty) return;
+    final uri = Uri.tryParse(resolved);
+    if (uri != null && await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Unable to open attachment URL')),
+      );
+    }
   }
 }

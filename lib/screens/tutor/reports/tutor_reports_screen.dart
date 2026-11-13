@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../services/report_service.dart';
+import '../../../utils/constants.dart';
 
 class TutorReportsScreen extends StatefulWidget {
   const TutorReportsScreen({Key? key}) : super(key: key);
@@ -84,7 +85,12 @@ class _TutorReportsScreenState extends State<TutorReportsScreen> {
   Widget _buildReportBox(String label, String val, Color color) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: color.withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: color.withOpacity(0.2))),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppThemeDesign.borderRadiusMedium,
+        boxShadow: const [AppThemeDesign.cardShadow],
+        border: Border.all(color: color.withOpacity(0.12), width: 1.5),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -106,15 +112,126 @@ class _TutorReportsScreenState extends State<TutorReportsScreen> {
       itemCount: courses.length,
       itemBuilder: (context, index) {
         final c = courses[index];
-        return Card(
+        return Container(
           margin: const EdgeInsets.only(bottom: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: AppThemeDesign.borderRadiusMedium,
+            boxShadow: const [AppThemeDesign.cardShadow],
+            border: Border.all(color: Colors.grey.shade100, width: 1),
+          ),
           child: ListTile(
-            title: Text(c['title'], style: const TextStyle(fontWeight: FontWeight.bold)),
+            title: Text(c['title'] ?? 'Untitled Course', style: const TextStyle(fontWeight: FontWeight.bold)),
             subtitle: Text("Progress: ${c['averageProgress']}% • Score: ${c['averageExamScore']}%"),
             trailing: const Icon(Icons.chevron_right),
+            onTap: () => _showCourseReportDetails(c),
           ),
         );
       },
+    );
+  }
+
+  void _showCourseReportDetails(Map<String, dynamic> c) {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      backgroundColor: Colors.white,
+      builder: (context) => Container(
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Expanded(
+                  child: Text(
+                    c['title'] ?? 'Course Report',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.black87),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close_rounded),
+                  onPressed: () => Navigator.of(context).pop(),
+                ),
+              ],
+            ),
+            const Divider(),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatBadge("Students", "${c['students'] ?? 0}", Icons.people_outline_rounded, Colors.indigo),
+                _buildStatBadge("Assignments", "${c['assignmentCount'] ?? 0}", Icons.assignment_outlined, Colors.orange),
+                _buildStatBadge("Exams", "${c['examCount'] ?? 0}", Icons.assessment_outlined, Colors.teal),
+              ],
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Performance Metrics',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black54),
+            ),
+            const SizedBox(height: 14),
+            _buildLinearMetricRow("Average Progress", c['averageProgress'] ?? 0, Colors.blue),
+            const SizedBox(height: 12),
+            _buildLinearMetricRow("Average Exam Score", c['averageExamScore'] ?? 0, Colors.green),
+            const SizedBox(height: 12),
+            _buildLinearMetricRow("Assignment Submission Rate", c['assignmentSubmissionRate'] ?? 0, Colors.purple),
+            const SizedBox(height: 12),
+            _buildLinearMetricRow("Class Attendance Rate", c['attendanceRate'] ?? 0, Colors.teal),
+            const SizedBox(height: 12),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatBadge(String label, String value, IconData icon, Color color) {
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.1),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, color: color, size: 20),
+        ),
+        const SizedBox(height: 6),
+        Text(value, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
+      ],
+    );
+  }
+
+  Widget _buildLinearMetricRow(String label, dynamic percentVal, Color color) {
+    final double value = (percentVal is num) ? percentVal.toDouble() : 0.0;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
+            Text('${value.toStringAsFixed(1)}%', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: color)),
+          ],
+        ),
+        const SizedBox(height: 6),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: LinearProgressIndicator(
+            value: value / 100.0,
+            backgroundColor: color.withOpacity(0.12),
+            valueColor: AlwaysStoppedAnimation<Color>(color),
+            minHeight: 8,
+          ),
+        ),
+      ],
     );
   }
 
@@ -133,7 +250,7 @@ class _TutorReportsScreenState extends State<TutorReportsScreen> {
           padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: Colors.red.withOpacity(0.05),
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: AppThemeDesign.borderRadiusMedium,
             border: Border.all(color: Colors.red.withOpacity(0.2)),
           ),
           child: Row(

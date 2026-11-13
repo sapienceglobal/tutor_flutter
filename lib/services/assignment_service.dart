@@ -42,7 +42,7 @@ class AssignmentService {
           );
 
           if (asgnRes.statusCode == 200) {
-            final asgnData = json.decode(asgnRes.body);
+            final asgnData = ApiConfig.normalizeMediaUrlsDeep(json.decode(asgnRes.body));
             final List assignmentsJson = asgnData['assignments'] ?? [];
             for (var aj in assignmentsJson) {
               final a = Assignment.fromJson(aj);
@@ -87,7 +87,7 @@ class AssignmentService {
     );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = ApiConfig.normalizeMediaUrlsDeep(json.decode(response.body));
       final List assignmentsJson = data['assignments'] ?? [];
       return assignmentsJson.map((aj) => Assignment.fromJson(aj)).toList();
     }
@@ -107,7 +107,7 @@ class AssignmentService {
     );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = ApiConfig.normalizeMediaUrlsDeep(json.decode(response.body));
       if (data['success']) {
         final a = Assignment.fromJson(data['assignment']);
         // If student, attach their submission from responseData.mySubmission
@@ -154,5 +154,153 @@ class AssignmentService {
       return true;
     }
     throw Exception(json.decode(response.body)['message'] ?? 'Submission failed');
+  }
+
+  // --- TUTOR SERVICES ---
+
+  Future<Assignment> createAssignment({
+    required String courseId,
+    String? batchId,
+    required String title,
+    required String description,
+    required DateTime dueDate,
+    required int totalMarks,
+    List<Map<String, dynamic>>? attachments,
+    String status = 'published',
+  }) async {
+    final token = await AuthService.getToken();
+    final apiKey = await AuthService.getApiKey();
+
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'x-api-key': apiKey ?? '',
+        'Content-Type': 'application/json',
+      },
+      body: json.encode({
+        'courseId': courseId,
+        if (batchId != null) 'batchId': batchId,
+        'title': title,
+        'description': description,
+        'dueDate': dueDate.toIso8601String(),
+        'totalMarks': totalMarks,
+        'attachments': attachments ?? [],
+        'status': status,
+      }),
+    );
+
+    if (response.statusCode == 201) {
+      final data = json.decode(response.body);
+      if (data['success'] == true) {
+        return Assignment.fromJson(data['assignment']);
+      }
+    }
+    throw Exception(json.decode(response.body)['message'] ?? 'Failed to create assignment');
+  }
+
+  Future<Assignment> updateAssignment(
+    String id, {
+    String? title,
+    String? description,
+    DateTime? dueDate,
+    int? totalMarks,
+    String? status,
+  }) async {
+    final token = await AuthService.getToken();
+    final apiKey = await AuthService.getApiKey();
+
+    final response = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/$id'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'x-api-key': apiKey ?? '',
+        'Content-Type': 'application/json',
+      },
+      body: json.encode({
+        if (title != null) 'title': title,
+        if (description != null) 'description': description,
+        if (dueDate != null) 'dueDate': dueDate.toIso8601String(),
+        if (totalMarks != null) 'totalMarks': totalMarks,
+        if (status != null) 'status': status,
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      if (data['success'] == true) {
+        return Assignment.fromJson(data['assignment']);
+      }
+    }
+    throw Exception(json.decode(response.body)['message'] ?? 'Failed to update assignment');
+  }
+
+  Future<bool> deleteAssignment(String id) async {
+    final token = await AuthService.getToken();
+    final apiKey = await AuthService.getApiKey();
+
+    final response = await http.delete(
+      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/$id'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'x-api-key': apiKey ?? '',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return data['success'] == true;
+    }
+    throw Exception(json.decode(response.body)['message'] ?? 'Failed to delete assignment');
+  }
+
+  Future<List<Map<String, dynamic>>> getAssignmentSubmissions(String id) async {
+    final token = await AuthService.getToken();
+    final apiKey = await AuthService.getApiKey();
+
+    final response = await http.get(
+      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/$id/submissions'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'x-api-key': apiKey ?? '',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = ApiConfig.normalizeMediaUrlsDeep(json.decode(response.body));
+      if (data['success'] == true) {
+        final List submissionsJson = data['submissions'] ?? [];
+        return List<Map<String, dynamic>>.from(submissionsJson);
+      }
+    }
+    throw Exception(json.decode(response.body)['message'] ?? 'Failed to load submissions');
+  }
+
+  Future<bool> gradeSubmission(
+    String submissionId, {
+    required double grade,
+    String? feedback,
+  }) async {
+    final token = await AuthService.getToken();
+    final apiKey = await AuthService.getApiKey();
+
+    final response = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/submissions/$submissionId/grade'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'x-api-key': apiKey ?? '',
+        'Content-Type': 'application/json',
+      },
+      body: json.encode({
+        'grade': grade,
+        'feedback': feedback ?? '',
+      }),
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      return data['success'] == true;
+    }
+    throw Exception(json.decode(response.body)['message'] ?? 'Failed to grade submission');
   }
 }

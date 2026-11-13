@@ -4,6 +4,7 @@ import '../../models/course_model.dart';
 import '../../providers/course_provider.dart';
 import '../../providers/category_provider.dart';
 import '../../utils/constants.dart';
+import '../../widgets/audience_selector.dart';
 
 class EditCourseScreen extends StatefulWidget {
   final CourseModel course;
@@ -26,6 +27,10 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
   String _selectedLanguage = 'English';
   bool _isFree = true;
 
+  String _audienceScope = 'institute';
+  List<String> _audienceBatchIds = [];
+  List<String> _audienceStudentIds = [];
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +49,11 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
     _selectedLanguage = widget.course.language;
     _isFree = widget.course.isFree;
     _selectedCategoryId = widget.course.category.id; // ✅ Store ID
+
+    final aud = widget.course.audience ?? {};
+    _audienceScope = aud['scope'] ?? 'institute';
+    _audienceBatchIds = List<String>.from(aud['batchIds'] ?? []);
+    _audienceStudentIds = List<String>.from(aud['studentIds'] ?? []);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final categoryProvider = Provider.of<CategoryProvider>(
@@ -87,6 +97,11 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
       'level': _selectedLevel,
       'duration': double.tryParse(_durationController.text) ?? 0,
       'language': _selectedLanguage,
+      'audience': {
+        'scope': _audienceScope,
+        'batchIds': _audienceBatchIds,
+        'studentIds': _audienceStudentIds,
+      },
     };
 
     final success = await courseProvider.updateCourse(
@@ -282,6 +297,21 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
                 onChanged: (value) {
                   setState(() {
                     _selectedLanguage = value!;
+                  });
+                },
+              ),
+              const SizedBox(height: 24),
+
+              AudienceSelector(
+                initialScope: _audienceScope,
+                initialBatchIds: _audienceBatchIds,
+                initialStudentIds: _audienceStudentIds,
+                courseId: widget.course.id,
+                onChanged: (scope, batchIds, studentIds) {
+                  setState(() {
+                    _audienceScope = scope;
+                    _audienceBatchIds = batchIds;
+                    _audienceStudentIds = studentIds;
                   });
                 },
               ),

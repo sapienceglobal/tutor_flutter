@@ -7,7 +7,11 @@ class ApiService {
 
   // Helper method to get headers
   static Map<String, String> _getHeaders({String? token}) {
-    final headers = {'Content-Type': 'application/json', 'x-api-key': apiKey};
+    final headers = {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'x-client-platform': 'mobile',
+    };
 
     if (token != null) {
       headers['Authorization'] = 'Bearer $token';
@@ -96,7 +100,8 @@ class ApiService {
 
   // RESPONSE HANDLER
   static Map<String, dynamic> _handleResponse(http.Response response) {
-    final data = jsonDecode(response.body);
+    final rawData = jsonDecode(response.body);
+    final data = ApiConfig.normalizeMediaUrlsDeep(rawData) as Map<String, dynamic>;
 
     if (response.statusCode >= 200 && response.statusCode < 300) {
       return data;

@@ -7,7 +7,9 @@ import '../../models/lesson_model.dart';
 import '../../providers/enrollment_provider.dart';
 import '../../services/course_service.dart';
 import '../../services/payment_service.dart';
+import '../../services/wishlist_service.dart';
 import '../../utils/constants.dart';
+import '../../widgets/sapience_ui.dart';
 import 'lesson_player_screen.dart';
 
 import '../../services/exam_service.dart';
@@ -19,6 +21,8 @@ import '../student/student_exam_result_screen.dart';
 import '../student/exam_instructions_screen.dart';
 import '../student/assignments/assignment_details_screen.dart';
 import '../common/live_meeting_screen.dart';
+import '../../services/review_service.dart';
+import '../../providers/auth_provider.dart';
 import 'package:intl/intl.dart';
 
 class CourseDetailScreen extends StatefulWidget {
@@ -35,32 +39,54 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
   late TabController _tabController;
   late Razorpay _razorpay;
   final _paymentService = PaymentService();
-  
+  final _wishlistService = WishlistService();
+
   bool _isLoading = true;
   CourseModel? _course;
   List<LessonModel> _lessons = [];
   bool _isEnrolled = false;
+  bool _isWishlisted = false;
+  bool _isTogglingWishlist = false;
+  int _selectedTabIndex = 0;
+  double _courseProgress = 0.0;
 
   List<dynamic> _exams = [];
   List<Assignment> _assignments = [];
   List<LiveClass> _liveClasses = [];
   bool _isLoadingEnrolledTabs = false;
 
+  // Review states
+  bool _isLoadingReview = false;
+  Map<String, dynamic>? _myReview;
+  bool _hasReviewed = false;
+  List<dynamic> _publicReviews = [];
+  bool _isLoadingPublicReviews = false;
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    
+    _tabController.addListener(_onTabChanged);
+
     _razorpay = Razorpay();
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
-    
+
     _loadCourseData();
+  }
+
+  void _onTabChanged() {
+    if (!_tabController.indexIsChanging && mounted) {
+      if (_selectedTabIndex != _tabController.index) {
+        setState(() => _selectedTabIndex = _tabController.index);
+      }
+    }
   }
 
   @override
   void dispose() {
+    _tabController.removeListener(_onTabChanged);
     _tabController.dispose();
     _razorpay.clear();
     super.dispose();
@@ -113,31 +139,119 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
       final data = await CourseService.getCourseById(widget.courseId);
       if (data != null) {
         final enrolled = data['isEnrolled'] ?? false;
+        _tabController.removeListener(_onTabChanged);
+        _tabController.dispose();
+        final newController = TabController(
+          length: enrolled ? 5 : 3,
+          vsync: this,
+        )..addListener(_onTabChanged);
+
         setState(() {
           _course = data['course'];
           _lessons = (data['lessons'] as List)
               .map((json) => LessonModel.fromJson(json))
               .toList();
           _isEnrolled = enrolled;
-          
-          _tabController.dispose();
-          _tabController = TabController(
-            length: _isEnrolled ? 5 : 3,
-            vsync: this,
-          );
+          _selectedTabIndex = 0;
+          _tabController = newController;
         });
 
+        _loadWishlistState();
+
         if (_isEnrolled) {
+          _syncEnrollmentProgress();
           await _loadEnrolledTabData();
+          _fetchMyReview();
+        } else {
+          _fetchPublicReviews();
         }
       }
     } catch (e) {
       print('Error loading course: $e');
     } finally {
-      setState(() {
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
+  }
+
+  Future<void> _loadWishlistState() async {
+    try {
+      final wishlist = await _wishlistService.getWishlist();
+      if (!mounted) return;
+      setState(() {
+        _isWishlisted = wishlist.any((c) => c.id == widget.courseId);
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _syncEnrollmentProgress() async {
+    try {
+      final provider = Provider.of<EnrollmentProvider>(context, listen: false);
+      if (provider.enrollments.isEmpty) {
+        await provider.fetchMyEnrollments();
+      }
+      if (!mounted) return;
+      for (final enr in provider.enrollments) {
+        if (enr.course.id == widget.courseId) {
+          setState(() {
+            _courseProgress = enr.progress.percentage.clamp(0.0, 100.0);
+          });
+          break;
+        }
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _toggleWishlist() async {
+    if (_isTogglingWishlist) return;
+    setState(() => _isTogglingWishlist = true);
+    try {
+      final ok = _isWishlisted
+          ? await _wishlistService.removeFromWishlist(widget.courseId)
+          : await _wishlistService.addToWishlist(widget.courseId);
+      if (!mounted) return;
+      if (ok) {
+        setState(() => _isWishlisted = !_isWishlisted);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              _isWishlisted ? 'Saved to your wishlist' : 'Removed from wishlist',
+            ),
+            backgroundColor:
+                _isWishlisted ? AppColors.secondary : AppColors.navyInk,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update wishlist: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isTogglingWishlist = false);
+    }
+  }
+
+  void _openContinueLearning() {
+    if (_lessons.isEmpty) {
+      setState(() {
+        _selectedTabIndex = 1;
+        _tabController.animateTo(1);
+      });
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LessonPlayerScreen(
+          lesson: _lessons.first,
+          courseId: widget.courseId,
+        ),
+      ),
+    ).then((_) => _syncEnrollmentProgress());
   }
 
   Future<void> _loadEnrolledTabData() async {
@@ -171,6 +285,117 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
       print('Error loading enrolled course tabs: $e');
     } finally {
       setState(() => _isLoadingEnrolledTabs = false);
+    }
+  }
+
+  Future<void> _fetchMyReview() async {
+    final token = Provider.of<AuthProvider>(context, listen: false).token;
+    if (token == null) return;
+    setState(() => _isLoadingReview = true);
+    try {
+      final res = await ReviewService.getMyReview(token: token, courseId: widget.courseId);
+      if (res['success'] == true) {
+        setState(() {
+          _myReview = res['review'];
+          _hasReviewed = res['hasReviewed'] ?? false;
+        });
+      }
+    } catch (e) {
+      print('Error fetching my review: $e');
+    } finally {
+      setState(() => _isLoadingReview = false);
+    }
+  }
+
+  Future<void> _fetchPublicReviews() async {
+    setState(() => _isLoadingPublicReviews = true);
+    try {
+      final res = await ReviewService.getCourseReviews(courseId: widget.courseId);
+      if (res['success'] == true) {
+        setState(() {
+          _publicReviews = res['reviews'] ?? [];
+        });
+      }
+    } catch (e) {
+      print('Error fetching public reviews: $e');
+    } finally {
+      setState(() => _isLoadingPublicReviews = false);
+    }
+  }
+
+  Future<void> _submitReview(int rating, String comment) async {
+    final token = Provider.of<AuthProvider>(context, listen: false).token;
+    if (token == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final res = await ReviewService.createReview(
+        token: token,
+        courseId: widget.courseId,
+        rating: rating,
+        comment: comment,
+      );
+
+      if (mounted) Navigator.pop(context); // Dismiss loader
+
+      if (res['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Review submitted successfully!'), backgroundColor: Colors.green),
+        );
+        _fetchMyReview();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message'] ?? 'Failed to submit review')),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Dismiss loader
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
+    }
+  }
+
+  Future<void> _updateReview(String reviewId, int rating, String comment) async {
+    final token = Provider.of<AuthProvider>(context, listen: false).token;
+    if (token == null) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final res = await ReviewService.updateReview(
+        token: token,
+        reviewId: reviewId,
+        rating: rating,
+        comment: comment,
+      );
+
+      if (mounted) Navigator.pop(context); // Dismiss loader
+
+      if (res['success'] == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Review updated successfully!'), backgroundColor: Colors.green),
+        );
+        _fetchMyReview();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message'] ?? 'Failed to update review')),
+        );
+      }
+    } catch (e) {
+      if (mounted) Navigator.pop(context); // Dismiss loader
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: $e')),
+      );
     }
   }
 
@@ -229,428 +454,1197 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return const SapienceBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: CircularProgressIndicator()),
+        ),
       );
     }
 
     if (_course == null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Course Details')),
-        body: const Center(child: Text('Course not found')),
+      return SapienceBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: SafeArea(
+            child: Column(
+              children: const [
+                SapienceHeader(title: 'Course Details'),
+                Expanded(child: Center(child: Text('Course not found'))),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
-    return Scaffold(
-      body: NestedScrollView(
-        headerSliverBuilder: (context, innerBoxIsScrolled) {
-          return [
-            SliverAppBar(
-              expandedHeight: 250,
-              pinned: true,
-              flexibleSpace: FlexibleSpaceBar(
-                background: CachedNetworkImage(
-                  imageUrl: _course!.thumbnail,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                    color: Colors.grey[300],
-                  ),
-                  errorWidget: (context, url, error) => Container(
-                    color: Colors.grey[300],
-                    child: const Icon(Icons.image, size: 80),
-                  ),
-                ),
-              ),
-            ),
-          ];
-        },
-        body: Column(
-          children: [
-            // Course Header Info
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              color: Colors.white,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Title
-                  Text(
-                    _course!.title,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
+    final tabs = _isEnrolled
+        ? const ['Overview', 'Curriculum', 'Live', 'Tasks', 'Exams']
+        : const ['Overview', 'Curriculum', 'Reviews'];
+
+    return SapienceBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              SapienceHeader(
+                title: _course!.title,
+                actions: [
+                  Material(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      onTap: _toggleWishlist,
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: AppColors.border),
+                          boxShadow: const [AppThemeDesign.softShadow],
+                        ),
+                        child: Icon(
+                          _isWishlisted
+                              ? Icons.bookmark_rounded
+                              : Icons.bookmark_border_rounded,
+                          color: _isWishlisted
+                              ? AppColors.primary
+                              : AppColors.navyInk,
+                          size: 21,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Category & Level
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _course!.category.name,
-                          style: TextStyle(
-                            color: AppColors.primary,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[200],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          _course!.level.toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Stats
-                  Row(
-                    children: [
-                      const Icon(Icons.star, color: Colors.amber, size: 20),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${_course!.rating.toStringAsFixed(1)} (${_course!.reviewCount})',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(width: 16),
-                      const Icon(Icons.people_outline,
-                          color: Colors.grey, size: 20),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${_course!.enrolledCount} students',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                      const SizedBox(width: 16),
-                      const Icon(Icons.access_time,
-                          color: Colors.grey, size: 20),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${_course!.duration.toStringAsFixed(0)}h',
-                        style: const TextStyle(fontSize: 14),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-
-                  // Tutor Info
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 20,
-                        backgroundImage: CachedNetworkImageProvider(
-                          _course!.tutor.user.profileImage,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _course!.tutor.user.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            Text(
-                              '${_course!.tutor.experience} years experience',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
                   ),
                 ],
               ),
-            ),
-
-             // Tabs
-            Container(
-              color: Colors.white,
-              child: TabBar(
-                controller: _tabController,
-                indicatorColor: AppColors.primary,
-                labelColor: AppColors.primary,
-                unselectedLabelColor: Colors.grey,
-                isScrollable: _isEnrolled, // scrollable if 5 tabs
-                tabs: _isEnrolled
-                    ? const [
-                        Tab(text: 'Overview'),
-                        Tab(text: 'Curriculum'),
-                        Tab(text: 'Live Classes'),
-                        Tab(text: 'Assignments'),
-                        Tab(text: 'Exams'),
-                      ]
-                    : const [
-                        Tab(text: 'Overview'),
-                        Tab(text: 'Curriculum'),
-                        Tab(text: 'Reviews'),
-                      ],
+              Expanded(
+                child: NestedScrollView(
+                  headerSliverBuilder: (context, innerBoxIsScrolled) {
+                    return [
+                      SliverToBoxAdapter(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                          child: Column(
+                            children: [
+                              _buildHeroCourseBanner(),
+                              const SizedBox(height: 12),
+                              SapienceStatsRow(
+                                items: [
+                                  SapienceStatItem(
+                                    icon: const Icon(
+                                      Icons.schedule_rounded,
+                                      size: 16,
+                                      color: AppColors.primary,
+                                    ),
+                                    value:
+                                        '${_course!.duration.toStringAsFixed(0)}h',
+                                    label: 'Duration',
+                                  ),
+                                  SapienceStatItem(
+                                    icon: const Icon(
+                                      Icons.play_lesson_rounded,
+                                      size: 16,
+                                      color: AppColors.secondary,
+                                    ),
+                                    value: '${_lessons.length}',
+                                    label: 'Lessons',
+                                  ),
+                                  SapienceStatItem(
+                                    icon: const Icon(
+                                      Icons.people_alt_rounded,
+                                      size: 16,
+                                      color: Color(0xFF7B3DF5),
+                                    ),
+                                    value: '${_course!.enrolledCount}',
+                                    label: 'Students',
+                                  ),
+                                  SapienceStatItem(
+                                    icon: const Icon(
+                                      Icons.bar_chart_rounded,
+                                      size: 16,
+                                      color: Color(0xFFE07A16),
+                                    ),
+                                    value: _course!.level.isNotEmpty
+                                        ? _course!.level[0].toUpperCase() +
+                                            _course!.level.substring(1)
+                                        : 'All',
+                                    label: 'Level',
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 14),
+                              SapienceSegmentedTabs(
+                                tabs: tabs,
+                                currentIndex: _selectedTabIndex.clamp(
+                                  0,
+                                  tabs.length - 1,
+                                ),
+                                onChanged: (index) {
+                                  setState(() => _selectedTabIndex = index);
+                                  _tabController.animateTo(index);
+                                },
+                              ),
+                              const SizedBox(height: 8),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ];
+                  },
+                  body: TabBarView(
+                    controller: _tabController,
+                    children: _isEnrolled
+                        ? [
+                            _buildOverviewTab(),
+                            _buildCurriculumTab(),
+                            _buildLiveClassesTab(),
+                            _buildAssignmentsTab(),
+                            _buildExamsTab(),
+                          ]
+                        : [
+                            _buildOverviewTab(),
+                            _buildCurriculumTab(),
+                            _buildReviewsTab(),
+                          ],
+                  ),
+                ),
               ),
-            ),
-
-            // Tab Content
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
-                children: _isEnrolled
-                    ? [
-                        _buildOverviewTab(),
-                        _buildCurriculumTab(),
-                        _buildLiveClassesTab(),
-                        _buildAssignmentsTab(),
-                        _buildExamsTab(),
-                      ]
-                    : [
-                        _buildOverviewTab(),
-                        _buildCurriculumTab(),
-                        _buildReviewsTab(),
-                      ],
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
+        bottomNavigationBar: _buildBottomBar(),
       ),
-      bottomNavigationBar: _buildBottomBar(),
+    );
+  }
+
+  Widget _buildHeroCourseBanner() {
+    return SapienceNavyWaveBanner(
+      borderRadius: 24,
+      padding: const EdgeInsets.all(18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.16),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _course!.category.name,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 9,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF1ED066).withOpacity(0.24),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(
+                            Icons.star_rounded,
+                            color: Color(0xFFFFCA28),
+                            size: 13,
+                          ),
+                          const SizedBox(width: 3),
+                          Text(
+                            '${_course!.rating.toStringAsFixed(1)} (${_course!.reviewCount})',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  _course!.title,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 19,
+                    height: 1.2,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'By ${_course!.tutor.user.name}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.84),
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                if (_isEnrolled) ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        '${_courseProgress.toStringAsFixed(0)}% Completed',
+                        style: const TextStyle(
+                          color: Color(0xFF7AF29B),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        '${_lessons.length} lessons',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.8),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: (_courseProgress / 100).clamp(0.0, 1.0),
+                      minHeight: 6,
+                      backgroundColor: Colors.white.withOpacity(0.18),
+                      valueColor: const AlwaysStoppedAnimation<Color>(
+                        Color(0xFF1ED066),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(18),
+            child: Container(
+              width: 96,
+              height: 112,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.12),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.22),
+                ),
+                borderRadius: BorderRadius.circular(18),
+              ),
+              child: _course!.thumbnail.isNotEmpty
+                  ? CachedNetworkImage(
+                      imageUrl: _course!.thumbnail,
+                      fit: BoxFit.cover,
+                      placeholder: (_, __) => Image.asset(
+                        'assets/images/cd-illustration.png',
+                        fit: BoxFit.cover,
+                      ),
+                      errorWidget: (_, __, ___) => Image.asset(
+                        'assets/images/cd-illustration.png',
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : Image.asset(
+                      'assets/images/cd-illustration.png',
+                      fit: BoxFit.cover,
+                    ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   Widget _buildOverviewTab() {
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Description
-          const Text(
-            'About this course',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
+          // About Course Card
+          SapienceCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'About This Course',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navyInk,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _course!.description,
+                  style: const TextStyle(
+                    fontSize: 13.5,
+                    color: AppColors.textSecondary,
+                    height: 1.55,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          Text(
-            _course!.description,
-            style: TextStyle(
-              fontSize: 14,
-              color: Colors.grey[700],
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 14),
 
           // What you'll learn
           if (_course!.whatYouWillLearn.isNotEmpty) ...[
-            const Text(
-              'What you\'ll learn',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ..._course!.whatYouWillLearn.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            SapienceCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
                     children: [
-                      Icon(
-                        Icons.check_circle,
-                        color: Colors.green,
-                        size: 20,
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.asset(
+                          'assets/images/cd-illustration.png',
+                          width: 44,
+                          height: 44,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
+                      const SizedBox(width: 12),
+                      const Expanded(
                         child: Text(
-                          item,
-                          style: const TextStyle(fontSize: 14),
+                          'What You\'ll Learn',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.navyInk,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                )),
-            const SizedBox(height: 24),
+                  const SizedBox(height: 14),
+                  ..._course!.whatYouWillLearn.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SapienceCheckBadge(size: 20),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              item,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                color: AppColors.navyInk,
+                                fontWeight: FontWeight.w500,
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
           ],
 
           // Requirements
           if (_course!.requirements.isNotEmpty) ...[
-            const Text(
-              'Requirements',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+            SapienceCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Requirements',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.navyInk,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  ..._course!.requirements.map(
+                    (item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            width: 7,
+                            height: 7,
+                            margin: const EdgeInsets.only(top: 6),
+                            decoration: const BoxDecoration(
+                              color: AppColors.primary,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              item,
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                color: AppColors.textSecondary,
+                                height: 1.45,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            ..._course!.requirements.map((item) => Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.circle,
-                        color: Colors.grey,
-                        size: 8,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          item,
-                          style: const TextStyle(fontSize: 14),
+            const SizedBox(height: 14),
+          ],
+
+          // Course Instructor Card
+          SapienceCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Course Instructor',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navyInk,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: CachedNetworkImage(
+                        imageUrl: _course!.tutor.user.profileImage,
+                        width: 52,
+                        height: 52,
+                        fit: BoxFit.cover,
+                        placeholder: (context, url) => Container(
+                          width: 52,
+                          height: 52,
+                          color: AppColors.primaryTint,
+                          child: const Icon(Icons.person_rounded,
+                              color: AppColors.primary),
+                        ),
+                        errorWidget: (context, url, error) => Container(
+                          width: 52,
+                          height: 52,
+                          color: AppColors.primaryTint,
+                          child: const Icon(Icons.person_rounded,
+                              color: AppColors.primary),
                         ),
                       ),
-                    ],
-                  ),
-                )),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _course!.tutor.user.name,
+                            style: const TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.navyInk,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${_course!.tutor.experience} years experience • ${_course!.tutor.rating.toStringAsFixed(1)} ★',
+                            style: const TextStyle(
+                              fontSize: 12.5,
+                              color: AppColors.textSecondary,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          if (_isEnrolled) ...[
+            const SizedBox(height: 14),
+            _buildMyReviewSection(),
           ],
         ],
       ),
     );
   }
 
+  Widget _buildMyReviewSection() {
+    if (_isLoadingReview) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.symmetric(vertical: 12),
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    if (_hasReviewed && _myReview != null) {
+      final rating = _myReview!['rating'] ?? 5;
+      final comment = _myReview!['comment'] ?? '';
+      final reviewId = _myReview!['_id'];
+      final tutorResponse = _myReview!['tutorResponse'];
+
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.amber.shade50.withOpacity(0.4),
+          borderRadius: AppThemeDesign.borderRadiusMedium,
+          border: Border.all(color: Colors.amber.shade200, width: 1),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Your Review',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                ),
+                TextButton.icon(
+                  onPressed: () {
+                    _showReviewForm(
+                      initialRating: rating,
+                      initialComment: comment,
+                      reviewId: reviewId,
+                    );
+                  },
+                  icon: const Icon(Icons.edit, size: 16, color: AppColors.primary),
+                  label: const Text(
+                    'Edit',
+                    style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: List.generate(5, (starIndex) {
+                return Icon(
+                  starIndex < rating ? Icons.star : Icons.star_border,
+                  color: Colors.amber,
+                  size: 20,
+                );
+              }),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              comment,
+              style: const TextStyle(fontSize: 14, color: Colors.black87),
+            ),
+            if (tutorResponse != null && tutorResponse['comment'] != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.amber.shade100),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.reply, size: 16, color: AppColors.primary),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Tutor Response',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      tutorResponse['comment'],
+                      style: TextStyle(fontSize: 13, color: Colors.grey[700], fontStyle: FontStyle.italic),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withOpacity(0.05),
+        borderRadius: AppThemeDesign.borderRadiusMedium,
+        border: Border.all(color: AppColors.primary.withOpacity(0.12), width: 1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Rate this course',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+          ),
+          const SizedBox(height: 4),
+          const Text(
+            'Share your thoughts to help other students.',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: List.generate(5, (index) {
+                  return InkWell(
+                    onTap: () {
+                      _showReviewForm(initialRating: index + 1);
+                    },
+                    child: const Icon(
+                      Icons.star_border,
+                      color: Colors.amber,
+                      size: 32,
+                    ),
+                  );
+                }),
+              ),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                ),
+                onPressed: () {
+                  _showReviewForm();
+                },
+                child: const Text('Write Review', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReviewForm({int? initialRating, String? initialComment, String? reviewId}) {
+    int rating = initialRating ?? 5;
+    final controller = TextEditingController(text: initialComment);
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 20,
+                bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    reviewId == null ? 'Write a Review' : 'Edit Your Review',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(5, (index) {
+                      final starVal = index + 1;
+                      return IconButton(
+                        icon: Icon(
+                          starVal <= rating ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 36,
+                        ),
+                        onPressed: () {
+                          setModalState(() {
+                            rating = starVal;
+                          });
+                        },
+                      );
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: controller,
+                    maxLines: 4,
+                    decoration: InputDecoration(
+                      hintText: 'Share your thoughts about this course...',
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      onPressed: () {
+                        final comment = controller.text.trim();
+                        if (comment.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Please enter a comment')),
+                          );
+                          return;
+                        }
+                        if (comment.length < 10) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Comment must be at least 10 characters')),
+                          );
+                          return;
+                        }
+                        Navigator.pop(context); // close bottom sheet
+                        if (reviewId == null) {
+                          _submitReview(rating, comment);
+                        } else {
+                          _updateReview(reviewId, rating, comment);
+                        }
+                      },
+                      child: Text(
+                        reviewId == null ? 'Submit Review' : 'Update Review',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   Widget _buildCurriculumTab() {
     if (_lessons.isEmpty) {
-      return const Center(
-        child: Text('No lessons available'),
+      return Center(
+        child: SapienceCard(
+          margin: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(Icons.menu_book_rounded, size: 42, color: AppColors.primary),
+              SizedBox(height: 10),
+              Text(
+                'No lessons available yet',
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.navyInk,
+                ),
+              ),
+            ],
+          ),
+        ),
       );
     }
 
     // Group lessons by module
-    Map<String, List<LessonModel>> lessonsByModule = {};
-    for (var lesson in _lessons) {
-      final moduleId = lesson.moduleId;
-      if (!lessonsByModule.containsKey(moduleId)) {
-        lessonsByModule[moduleId] = [];
-      }
-      lessonsByModule[moduleId]!.add(lesson);
+    final Map<String, List<LessonModel>> lessonsByModule = {};
+    for (final lesson in _lessons) {
+      lessonsByModule.putIfAbsent(lesson.moduleId, () => []).add(lesson);
+    }
+
+    const tones = [
+      SapienceTileTone.blue,
+      SapienceTileTone.green,
+      SapienceTileTone.purple,
+      SapienceTileTone.orange,
+    ];
+    final toneColors = [
+      AppColors.primary,
+      AppColors.secondary,
+      const Color(0xFF7B3DF5),
+      const Color(0xFFE07A16),
+    ];
+
+    if (_course!.modules.isEmpty) {
+      return ListView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        itemCount: _lessons.length,
+        itemBuilder: (context, index) {
+          final lesson = _lessons[index];
+          return _buildLessonRowCard(
+            lesson,
+            tones[index % tones.length],
+            toneColors[index % toneColors.length],
+          );
+        },
+      );
     }
 
     return ListView.builder(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       itemCount: _course!.modules.length,
       itemBuilder: (context, index) {
         final module = _course!.modules[index];
         final moduleLessons = lessonsByModule[module.id] ?? [];
+        final accent = toneColors[index % toneColors.length];
 
-        return Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          child: ExpansionTile(
-            title: Text(
-              module.title,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+        return SapienceCard(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: EdgeInsets.zero,
+          child: Theme(
+            data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+            child: ExpansionTile(
+              initiallyExpanded: index == 0,
+              tilePadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+              leading: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: accent.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  (index + 1).toString().padLeft(2, '0'),
+                  style: TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                    color: accent,
+                  ),
+                ),
+              ),
+              title: Text(
+                module.title,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  color: AppColors.navyInk,
+                ),
+              ),
+              subtitle: Text(
+                '${moduleLessons.length} ${moduleLessons.length == 1 ? 'lesson' : 'lessons'}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              children: moduleLessons.asMap().entries.map((entry) {
+                final lIdx = entry.key;
+                return _buildLessonRowCard(
+                  entry.value,
+                  tones[(index + lIdx) % tones.length],
+                  toneColors[(index + lIdx) % toneColors.length],
+                );
+              }).toList(),
             ),
-            subtitle: Text('${moduleLessons.length} lessons'),
-            children: moduleLessons.map((lesson) {
-              final canAccess = _isEnrolled || lesson.isFree;
-
-              return ListTile(
-                leading: Icon(
-                  lesson.type == 'video'
-                      ? Icons.play_circle_outline
-                      : lesson.type == 'document'
-                          ? Icons.description_outlined
-                          : Icons.quiz_outlined,
-                  color: canAccess ? AppColors.primary : Colors.grey,
-                ),
-                title: Text(lesson.title),
-                subtitle: Row(
-                  children: [
-                    if (lesson.content.duration != null) ...[
-                      const Icon(Icons.access_time, size: 14),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${(lesson.content.duration! / 60).toStringAsFixed(0)} min',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ],
-                    if (lesson.isFree) ...[
-                      const SizedBox(width: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 2,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'FREE',
-                          style: TextStyle(
-                            color: Colors.green,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-                trailing: canAccess
-                    ? const Icon(Icons.chevron_right)
-                    : const Icon(Icons.lock_outline, color: Colors.grey),
-                onTap: canAccess
-                    ? () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => LessonPlayerScreen(
-                              lesson: lesson,
-                              courseId: widget.courseId,
-                            ),
-                          ),
-                        );
-                      }
-                    : null,
-              );
-            }).toList(),
           ),
         );
       },
     );
   }
 
-  Widget _buildReviewsTab() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.rate_review_outlined, size: 80, color: Colors.grey[300]),
-          const SizedBox(height: 16),
-          Text(
-            'Reviews coming soon',
-            style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-          ),
-        ],
+  Widget _buildLessonRowCard(
+    LessonModel lesson,
+    SapienceTileTone tone,
+    Color accentColor,
+  ) {
+    final canAccess = _isEnrolled || lesson.isFree;
+    final iconData = lesson.type == 'video'
+        ? Icons.play_circle_outline_rounded
+        : lesson.type == 'document'
+            ? Icons.description_outlined
+            : Icons.quiz_outlined;
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: SapienceTintedTile(
+        tone: tone,
+        borderRadius: 16,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        onTap: canAccess
+            ? () {
+                Navigator.of(context)
+                    .push(
+                      MaterialPageRoute(
+                        builder: (_) => LessonPlayerScreen(
+                          lesson: lesson,
+                          courseId: widget.courseId,
+                        ),
+                      ),
+                    )
+                    .then((_) => _syncEnrollmentProgress());
+              }
+            : () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Enroll in this course to unlock this lesson'),
+                  ),
+                );
+              },
+        child: Row(
+          children: [
+            Container(
+              width: 38,
+              height: 38,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [AppThemeDesign.softShadow],
+              ),
+              child: Icon(
+                iconData,
+                color: canAccess ? accentColor : AppColors.textMuted,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    lesson.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.navyInk,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if (lesson.content.duration != null) ...[
+                        const Icon(
+                          Icons.access_time_rounded,
+                          size: 13,
+                          color: AppColors.textSecondary,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          '${(lesson.content.duration! / 60).ceil()} min',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ] else
+                        Text(
+                          lesson.type.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      if (lesson.isFree) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.secondary.withOpacity(0.14),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'FREE',
+                            style: TextStyle(
+                              color: AppColors.secondary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            SapiencePlayCircle(
+              solid: canAccess,
+              locked: !canAccess,
+              size: 32,
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _buildReviewsTab() {
+    if (_isLoadingPublicReviews) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.primary));
+    }
+    if (_publicReviews.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.rate_review_outlined, size: 80, color: Colors.grey[300]),
+            const SizedBox(height: 16),
+            Text(
+              'No reviews yet for this course',
+              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: _publicReviews.length,
+      padding: const EdgeInsets.all(16),
+      itemBuilder: (context, index) {
+        final review = _publicReviews[index];
+        final student = review['studentId'];
+        final studentName = student != null ? student['name'] : 'Student';
+        final studentImg = student != null ? student['profileImage'] : null;
+        final rating = review['rating'] ?? 5;
+        final comment = review['comment'] ?? '';
+        final tutorResponse = review['tutorResponse'];
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 16),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: AppThemeDesign.borderRadiusMedium,
+            boxShadow: const [AppThemeDesign.cardShadow],
+            border: Border.all(color: Colors.grey.shade100, width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 20,
+                    backgroundImage: studentImg != null ? CachedNetworkImageProvider(studentImg) : null,
+                    child: studentImg == null ? const Icon(Icons.person) : null,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          studentName,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: List.generate(5, (starIndex) {
+                            return Icon(
+                              starIndex < rating ? Icons.star : Icons.star_border,
+                              color: Colors.amber,
+                              size: 16,
+                            );
+                          }),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                comment,
+                style: const TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+              if (tutorResponse != null && tutorResponse['comment'] != null) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.grey[50],
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade200),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(Icons.reply, size: 16, color: AppColors.primary),
+                          const SizedBox(width: 6),
+                          const Text(
+                            'Tutor Response',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.primary),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        tutorResponse['comment'],
+                        style: TextStyle(fontSize: 13, color: Colors.grey[700], fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -682,9 +1676,14 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
             (liveClass.status == 'scheduled' &&
                 liveClass.dateTime.isBefore(DateTime.now().add(const Duration(minutes: 5))));
 
-        return Card(
+        return Container(
           margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: AppThemeDesign.borderRadiusMedium,
+            boxShadow: const [AppThemeDesign.cardShadow],
+            border: Border.all(color: Colors.grey.shade100, width: 1),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -739,7 +1738,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                       backgroundColor: Colors.blueAccent,
                       foregroundColor: Colors.white,
                       disabledBackgroundColor: Colors.grey[200],
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
                     ),
                     child: const Text('Join Class', style: TextStyle(fontWeight: FontWeight.bold)),
                   ),
@@ -783,9 +1782,14 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
         final isSubmitted = assignment.mySubmission != null;
         final isGraded = assignment.mySubmission?.status == 'graded';
 
-        return Card(
+        return Container(
           margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: AppThemeDesign.borderRadiusMedium,
+            boxShadow: const [AppThemeDesign.cardShadow],
+            border: Border.all(color: Colors.grey.shade100, width: 1),
+          ),
           child: InkWell(
             onTap: () {
               Navigator.push(
@@ -924,9 +1928,14 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
         final buttonText = isCompletedState ? 'View Result' : 'Take Exam';
         final buttonColor = isCompletedState ? Colors.teal : AppColors.primary;
 
-        return Card(
+        return Container(
           margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: AppThemeDesign.borderRadiusMedium,
+            boxShadow: const [AppThemeDesign.cardShadow],
+            border: Border.all(color: Colors.grey.shade100, width: 1),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -991,7 +2000,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                       backgroundColor: buttonColor,
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
                     ),
                     child: Text(
                       buttonText,
@@ -1177,84 +2186,112 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
   }
 
   Widget _buildBottomBar() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _course!.isFree ? 'Free' : '₹${_course!.price.toStringAsFixed(0)}',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primary,
-                  ),
-                ),
-                if (!_course!.isFree)
-                  Text(
-                    'One-time payment',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-              ],
+    if (_course == null) return const SizedBox.shrink();
+    return SafeArea(
+      top: false,
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
+          border: Border(top: BorderSide(color: AppColors.border)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0E2960).withOpacity(0.08),
+              blurRadius: 16,
+              offset: const Offset(0, -4),
             ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Consumer<EnrollmentProvider>(
-              builder: (context, enrollmentProvider, _) {
-                return ElevatedButton(
-                  onPressed: _isEnrolled
-                      ? null
-                      : enrollmentProvider.isLoading
-                          ? null
-                          : _enrollInCourse,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor:
-                        _isEnrolled ? Colors.grey : AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: enrollmentProvider.isLoading
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(
-                            color: Colors.white,
-                            strokeWidth: 2,
-                          ),
-                        )
-                      : Text(
-                          _isEnrolled ? 'Enrolled' : 'Enroll Now',
+          ],
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              flex: 4,
+              child: _isEnrolled
+                  ? SapienceButton(
+                      label: _isWishlisted ? 'Saved' : 'Save Course',
+                      leadingIcon: _isWishlisted
+                          ? Icons.bookmark_rounded
+                          : Icons.bookmark_border_rounded,
+                      variant: SapienceButtonVariant.outlinedNavy,
+                      height: 48,
+                      fontSize: 13.5,
+                      onTap: _toggleWishlist,
+                    )
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _course!.isFree
+                              ? 'Free Course'
+                              : '₹${_course!.price.toStringAsFixed(0)}',
                           style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w800,
+                            color: AppColors.navyInk,
                           ),
                         ),
-                );
-              },
+                        Text(
+                          _course!.isFree
+                              ? 'Instant full access'
+                              : 'One-time enrollment',
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            color: AppColors.textSecondary,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
             ),
-          ),
-        ],
+            const SizedBox(width: 12),
+            Expanded(
+              flex: 6,
+              child: _isEnrolled
+                  ? SapienceButton(
+                      label: 'Continue Learning',
+                      trailingIcon: Icons.arrow_forward_rounded,
+                      variant: SapienceButtonVariant.greenToBlue,
+                      height: 48,
+                      fontSize: 14,
+                      onTap: _openContinueLearning,
+                    )
+                  : Consumer<EnrollmentProvider>(
+                      builder: (context, enrollmentProvider, _) {
+                        if (enrollmentProvider.isLoading) {
+                          return Container(
+                            height: 48,
+                            decoration: BoxDecoration(
+                              gradient: AppThemeDesign.greenToBlueGradient,
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            alignment: Alignment.center,
+                            child: const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                color: Colors.white,
+                                strokeWidth: 2.2,
+                              ),
+                            ),
+                          );
+                        }
+                        return SapienceButton(
+                          label: _course!.isFree
+                              ? 'Enroll Free'
+                              : 'Enroll Now • ₹${_course!.price.toStringAsFixed(0)}',
+                          trailingIcon: Icons.arrow_forward_rounded,
+                          variant: SapienceButtonVariant.greenToBlue,
+                          height: 48,
+                          fontSize: 14,
+                          onTap: _enrollInCourse,
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
       ),
     );
   }

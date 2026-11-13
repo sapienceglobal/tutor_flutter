@@ -1,4 +1,5 @@
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'dart:convert';
 import '../models/user_model.dart';
 import 'api_service.dart';
@@ -7,6 +8,7 @@ import '../config/api_config.dart';
 class AuthService {
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   // Register user
   static Future<Map<String, dynamic>> register({
@@ -241,8 +243,8 @@ class AuthService {
     required String token,
     required UserModel user,
   }) async {
+    await _secureStorage.write(key: _tokenKey, value: token);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_tokenKey, token);
     await prefs.setString(_userKey, jsonEncode(user.toJson()));
   }
 
@@ -254,8 +256,7 @@ class AuthService {
 
   // Get token
   static Future<String?> getToken() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_tokenKey);
+    return await _secureStorage.read(key: _tokenKey);
   }
 
   static Future<String?> getApiKey() async {
@@ -268,7 +269,9 @@ class AuthService {
       final prefs = await SharedPreferences.getInstance();
       final userString = prefs.getString(_userKey);
       if (userString != null) {
-        return UserModel.fromJson(jsonDecode(userString));
+        final rawMap = jsonDecode(userString);
+        final normalized = ApiConfig.normalizeMediaUrlsDeep(rawMap) as Map<String, dynamic>;
+        return UserModel.fromJson(normalized);
       }
       return null;
     } catch (e) {
@@ -284,8 +287,8 @@ class AuthService {
 
   // Logout
   static Future<void> logout() async {
+    await _secureStorage.delete(key: _tokenKey);
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
   }
 }

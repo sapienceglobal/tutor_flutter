@@ -132,14 +132,8 @@ class _MyEnrollmentsScreenState extends State<MyEnrollmentsScreen>
         margin: const EdgeInsets.only(bottom: 16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          borderRadius: AppThemeDesign.borderRadiusMedium,
+          boxShadow: const [AppThemeDesign.cardShadow],
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,7 +141,7 @@ class _MyEnrollmentsScreenState extends State<MyEnrollmentsScreen>
             // Thumbnail
             ClipRRect(
               borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
+                top: Radius.circular(AppThemeDesign.radiusMedium),
               ),
               child: Stack(
                 children: [

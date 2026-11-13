@@ -72,6 +72,7 @@ class ExamService {
     bool hideSolutions = false,
     DateTime? startDate,
     DateTime? endDate,
+    Map<String, dynamic>? audience,
   }) async {
     try {
       final token = await AuthService.getToken();
@@ -100,6 +101,7 @@ class ExamService {
           'hideSolutions': hideSolutions,
           if (startDate != null) 'startDate': startDate.toIso8601String(),
           if (endDate != null) 'endDate': endDate.toIso8601String(),
+          if (audience != null) 'audience': audience,
         },
         token: token,
       );
@@ -187,10 +189,19 @@ class ExamService {
       }
 
       final response = await ApiService.get(
-        '${ApiConfig.studentExamsEndpoint}/all',
+        '/exams/student/all',
         token: token,
         queryParams: queryParams,
       );
+
+      if (response['success'] == true && response['exams'] != null) {
+        final List exams = response['exams'];
+        for (var exam in exams) {
+          if (exam is Map) {
+            exam['attemptCount'] = exam['myAttemptCount'] ?? 0;
+          }
+        }
+      }
 
       return response;
     } catch (e) {

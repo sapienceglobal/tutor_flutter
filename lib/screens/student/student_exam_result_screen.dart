@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/exam_service.dart';
 import '../../utils/constants.dart';
+import '../../widgets/sapience_ui.dart';
 import 'exam_instructions_screen.dart';
 
 class StudentExamResultScreen extends StatefulWidget {
@@ -150,7 +151,7 @@ class _StudentExamResultScreenState extends State<StudentExamResultScreen> {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
         title: Row(
           children: [
             Icon(icon, color: color, size: 28),
@@ -172,33 +173,50 @@ class _StudentExamResultScreenState extends State<StudentExamResultScreen> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
+      return const SapienceBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: Center(child: CircularProgressIndicator()),
         ),
       );
     }
 
     if (_errorMessage != null) {
-      return Scaffold(
-        appBar: AppBar(title: const Text('Exam Scorecard')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(32),
+      return SapienceBackground(
+        child: Scaffold(
+          backgroundColor: Colors.transparent,
+          body: SafeArea(
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 64, color: Colors.red),
-                const SizedBox(height: 16),
-                Text(_errorMessage!, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, color: Colors.red)),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
+                const SapienceHeader(title: 'Exam Scorecard'),
+                Expanded(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(32),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline,
+                              size: 64, color: AppColors.error),
+                          const SizedBox(height: 16),
+                          Text(
+                            _errorMessage!,
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              color: AppColors.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          SapienceButton(
+                            label: 'Go Back',
+                            onTap: () => Navigator.of(context).pop(),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
-                  child: const Text('Go Back'),
                 ),
               ],
             ),
@@ -211,24 +229,31 @@ class _StudentExamResultScreenState extends State<StudentExamResultScreen> {
     final num rawScore = _attemptData['score'] ?? 0;
     final num rawTotal = _attemptData['totalMarks'] ?? 100;
     final num rawPct = _attemptData['percentage'] ?? 0.0;
-    
+
     final double score = rawScore.toDouble();
     final double totalMarks = rawTotal.toDouble();
     final double pct = rawPct.toDouble();
 
-    final String scoreStr = score == score.toInt() ? score.toInt().toString() : score.toStringAsFixed(2);
-    final String totalMarksStr = totalMarks == totalMarks.toInt() ? totalMarks.toInt().toString() : totalMarks.toStringAsFixed(2);
+    final String scoreStr =
+        score == score.toInt() ? score.toInt().toString() : score.toStringAsFixed(2);
+    final String totalMarksStr = totalMarks == totalMarks.toInt()
+        ? totalMarks.toInt().toString()
+        : totalMarks.toStringAsFixed(2);
 
     final bool isPassed = _attemptData['isPassed'] ?? false;
     final int attemptNum = _attemptData['attemptNumber'] ?? 1;
     final int timeSpent = _attemptData['timeSpent'] ?? 0;
     final String dateStr = _attemptData['submittedAt'] ?? '';
 
-    final int correctCount = _attemptData['correctCount'] ?? _analysis.where((q) => q['status'] == 'correct').length;
-    final int incorrectCount = _attemptData['incorrectCount'] ?? _analysis.where((q) => q['status'] == 'incorrect').length;
-    final int unansweredCount = _attemptData['unansweredCount'] ?? _analysis.where((q) => q['status'] == 'unanswered').length;
+    final int correctCount = _attemptData['correctCount'] ??
+        _analysis.where((q) => q['status'] == 'correct').length;
+    final int incorrectCount = _attemptData['incorrectCount'] ??
+        _analysis.where((q) => q['status'] == 'incorrect').length;
+    final int unansweredCount = _attemptData['unansweredCount'] ??
+        _analysis.where((q) => q['status'] == 'unanswered').length;
     final int totalQuestions = _analysis.length;
-    final double accuracy = totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0.0;
+    final double accuracy =
+        totalQuestions > 0 ? (correctCount / totalQuestions) * 100 : 0.0;
 
     final gradeInfo = _getGradeInfo(pct);
 
@@ -238,169 +263,219 @@ class _StudentExamResultScreenState extends State<StudentExamResultScreen> {
       return q['status'] == _qFilter;
     }).toList();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FD),
-      appBar: AppBar(
-        title: const Text('Exam Scorecard', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1.0,
-        actions: [
-          if (!isPassed)
-            IconButton(
-              icon: Icon(Icons.replay, color: AppColors.primary),
-              tooltip: 'Retake Exam',
-              onPressed: _retakeExam,
-            ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          children: [
-            // Status bar at top
-            Container(
-              height: 6,
-              width: double.infinity,
-              color: isPassed ? Colors.green : Colors.red,
-            ),
-
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // 1. Sleek Header Card
-                  _buildHeaderCard(examTitle, isPassed, dateStr, attemptNum, timeSpent),
-
-                  const SizedBox(height: 20),
-
-                  // 2. Grid Statistics Cards
-                  _buildStatsGrid(scoreStr, totalMarksStr, pct, isPassed, accuracy, correctCount, gradeInfo),
-
-                  const SizedBox(height: 20),
-
-                  // 3. Performance Analytics Card
-                  _buildAnalyticsCard(correctCount, incorrectCount, unansweredCount, totalQuestions, pct, isPassed),
-
-                  const SizedBox(height: 20),
-
-                  // 4. Question Review Panel
-                  _buildQuestionReviewSection(filteredQuestions),
+    return SapienceBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              SapienceHeader(
+                title: 'Exam Scorecard',
+                actions: [
+                  if (!isPassed)
+                    Material(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        onTap: _retakeExam,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.border),
+                            boxShadow: const [AppThemeDesign.softShadow],
+                          ),
+                          child: const Icon(
+                            Icons.replay_rounded,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
               ),
-            ),
-          ],
+              Expanded(
+                child: SingleChildScrollView(
+                  physics: const BouncingScrollPhysics(),
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildHeaderCard(
+                        examTitle,
+                        isPassed,
+                        dateStr,
+                        attemptNum,
+                        timeSpent,
+                        scoreStr,
+                        totalMarksStr,
+                        pct,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildStatsGrid(
+                        scoreStr,
+                        totalMarksStr,
+                        pct,
+                        isPassed,
+                        accuracy,
+                        correctCount,
+                        gradeInfo,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildAnalyticsCard(
+                        correctCount,
+                        incorrectCount,
+                        unansweredCount,
+                        totalQuestions,
+                        pct,
+                        isPassed,
+                      ),
+                      const SizedBox(height: 16),
+                      _buildQuestionReviewSection(filteredQuestions),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
   }
 
-  Widget _buildHeaderCard(String title, bool isPassed, String dateStr, int attemptNum, int timeSpent) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isPassed ? Colors.green.shade50 : Colors.red.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Icon(
-                    isPassed ? Icons.emoji_events : Icons.assignment_late_outlined,
-                    color: isPassed ? Colors.green : Colors.red,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Colors.black87),
+  Widget _buildHeaderCard(
+    String title,
+    bool isPassed,
+    String dateStr,
+    int attemptNum,
+    int timeSpent,
+    String scoreStr,
+    String totalMarksStr,
+    double pct,
+  ) {
+    return SapienceNavyWaveBanner(
+      borderRadius: 24,
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              SapienceScoreRing(
+                percentage: pct.clamp(0.0, 100.0),
+                size: 86,
+                strokeWidth: 8,
+                trackColor: Colors.white.withOpacity(0.18),
+                center: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '${pct.toStringAsFixed(0)}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
                       ),
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isPassed ? Colors.green.shade50 : Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: isPassed ? Colors.green.withValues(alpha: 0.2) : Colors.red.withValues(alpha: 0.2)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                color: isPassed ? Colors.green : Colors.red,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(
-                              isPassed ? 'STATUS: PASSED' : 'STATUS: FAILED',
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: isPassed ? Colors.green.shade700 : Colors.red.shade700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            const SizedBox(height: 16),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _buildMetaChip('Date', _formatDate(dateStr)),
-                _buildMetaChip('Time Taken', _formatDuration(timeSpent)),
-                _buildMetaChip('Attempt', '#$attemptNum'),
-              ],
-            ),
-            if (!isPassed) ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: _retakeExam,
-                  icon: const Icon(Icons.replay, size: 18),
-                  label: const Text('Retake Test', style: TextStyle(fontWeight: FontWeight.bold)),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
                     ),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
+                    Text(
+                      '$scoreStr/$totalMarksStr',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.8),
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: isPassed
+                            ? const Color(0xFF16B53A).withOpacity(0.28)
+                            : const Color(0xFFEB1F1F).withOpacity(0.28),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            isPassed
+                                ? Icons.emoji_events_rounded
+                                : Icons.assignment_late_rounded,
+                            color: Colors.white,
+                            size: 13,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            isPassed ? 'PASSED' : 'NEEDS REVIEW',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.4,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: Colors.white,
+                        height: 1.25,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Attempt #$attemptNum • ${_formatDate(dateStr)}',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.78),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildMetaChip('Time', _formatDuration(timeSpent)),
+              _buildMetaChip('Attempt', '#$attemptNum'),
+              _buildMetaChip('Marks', '$scoreStr / $totalMarksStr'),
+            ],
+          ),
+          if (!isPassed) ...[
+            const SizedBox(height: 14),
+            SapienceButton(
+              label: 'Retake Exam',
+              leadingIcon: Icons.replay_rounded,
+              variant: SapienceButtonVariant.greenToBlue,
+              height: 44,
+              onTap: _retakeExam,
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -409,138 +484,213 @@ class _StudentExamResultScreenState extends State<StudentExamResultScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF5F6FA),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.grey.shade200),
+        color: Colors.white.withOpacity(0.14),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: RichText(
         text: TextSpan(
-          style: const TextStyle(fontSize: 12, color: Colors.black54),
+          style: const TextStyle(fontSize: 12, color: Colors.white),
           children: [
-            TextSpan(text: '${label.toUpperCase()}: ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 10)),
-            TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.w600, color: Colors.black87)),
+            TextSpan(
+              text: '${label.toUpperCase()}: ',
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                fontSize: 10,
+                color: Colors.white.withOpacity(0.78),
+              ),
+            ),
+            TextSpan(
+              text: value,
+              style: const TextStyle(
+                fontWeight: FontWeight.w700,
+                color: Colors.white,
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatsGrid(String scoreStr, String totalMarksStr, double pct, bool isPassed, double accuracy, int correctCount, Map<String, dynamic> gradeInfo) {
+  Widget _buildStatsGrid(
+    String scoreStr,
+    String totalMarksStr,
+    double pct,
+    bool isPassed,
+    double accuracy,
+    int correctCount,
+    Map<String, dynamic> gradeInfo,
+  ) {
     return GridView.count(
       crossAxisCount: 2,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
-      childAspectRatio: 1.45,
+      childAspectRatio: 1.5,
       children: [
-        _buildStatBox('Score', '$scoreStr / $totalMarksStr', 'Points Earned', Icons.trending_up, Colors.indigo),
-        _buildStatBox('Percentage', '${pct.toStringAsFixed(1)}%', isPassed ? 'Above cutoff' : 'Below cutoff', Icons.insert_chart_outlined, isPassed ? Colors.green : Colors.red),
-        _buildStatBox('Accuracy', '${accuracy.toStringAsFixed(1)}%', '$correctCount Correct', Icons.track_changes, Colors.orange),
-        _buildStatBox('Grade', gradeInfo['grade'], gradeInfo['label'], Icons.star, gradeInfo['color']),
+        _buildStatBox(
+          'Score',
+          '$scoreStr / $totalMarksStr',
+          'Points Earned',
+          Icons.trending_up_rounded,
+          SapienceTileTone.blue,
+          AppColors.primary,
+        ),
+        _buildStatBox(
+          'Percentage',
+          '${pct.toStringAsFixed(1)}%',
+          isPassed ? 'Above cutoff' : 'Below cutoff',
+          Icons.insert_chart_outlined_rounded,
+          isPassed ? SapienceTileTone.green : SapienceTileTone.pink,
+          isPassed ? AppColors.secondary : AppColors.error,
+        ),
+        _buildStatBox(
+          'Accuracy',
+          '${accuracy.toStringAsFixed(1)}%',
+          '$correctCount Correct',
+          Icons.track_changes_rounded,
+          SapienceTileTone.orange,
+          const Color(0xFFE07A16),
+        ),
+        _buildStatBox(
+          'Grade',
+          gradeInfo['grade'],
+          gradeInfo['label'],
+          Icons.star_rounded,
+          SapienceTileTone.purple,
+          gradeInfo['color'],
+        ),
       ],
     );
   }
 
-  Widget _buildStatBox(String title, String value, String sub, IconData icon, Color color) {
-    return Container(
+  Widget _buildStatBox(
+    String title,
+    String value,
+    String sub,
+    IconData icon,
+    SapienceTileTone tone,
+    Color color,
+  ) {
+    return SapienceTintedTile(
+      tone: tone,
+      borderRadius: 18,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(title, style: TextStyle(color: Colors.grey[600], fontSize: 12, fontWeight: FontWeight.bold)),
-              Icon(icon, color: color, size: 18),
+              Text(
+                title,
+                style: const TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Icon(icon, color: color, size: 16),
+              ),
             ],
           ),
           const Spacer(),
           Text(
             value,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 20, color: Colors.black87),
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 20,
+              color: AppColors.navyInk,
+            ),
           ),
           const SizedBox(height: 2),
-          Text(sub, style: TextStyle(color: Colors.grey[500], fontSize: 10, fontWeight: FontWeight.w500)),
+          Text(
+            sub,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildAnalyticsCard(int correct, int incorrect, int unanswered, int total, double pct, bool isPassed) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(color: Colors.grey.shade200),
-      ),
-      color: Colors.white,
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.analytics_outlined, color: AppColors.primary, size: 20),
-                const SizedBox(width: 8),
-                const Text('Performance breakdown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.black87)),
-              ],
-            ),
-            const SizedBox(height: 20),
-            // Flex metrics badges
-            Row(
-              children: [
-                _buildBreakdownBadge('Correct', correct, Colors.green),
-                const SizedBox(width: 8),
-                _buildBreakdownBadge('Incorrect', incorrect, Colors.red),
-                const SizedBox(width: 8),
-                _buildBreakdownBadge('Skipped', unanswered, Colors.grey),
-              ],
-            ),
-            const SizedBox(height: 20),
-            // Progress Bar
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text('SCORE PROGRESS', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black54)),
-                    Text('${pct.toStringAsFixed(1)}%', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: isPassed ? Colors.green : Colors.red)),
-                  ],
+  Widget _buildAnalyticsCard(
+    int correct,
+    int incorrect,
+    int unanswered,
+    int total,
+    double pct,
+    bool isPassed,
+  ) {
+    return SapienceCard(
+      padding: const EdgeInsets.all(18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.analytics_outlined, color: AppColors.primary, size: 20),
+              SizedBox(width: 8),
+              Text(
+                'Performance Breakdown',
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15.5,
+                  color: AppColors.navyInk,
                 ),
-                const SizedBox(height: 6),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Container(
-                    height: 12,
-                    width: double.infinity,
-                    color: const Color(0xFFF0F2F6),
-                    child: FractionallySizedBox(
-                      alignment: Alignment.centerLeft,
-                      widthFactor: (pct / 100.0).clamp(0.0, 1.0),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: isPassed
-                                ? [Colors.green.shade400, Colors.green.shade600]
-                                : [Colors.red.shade400, Colors.red.shade600],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _buildBreakdownBadge('Correct', correct, AppColors.secondary),
+              const SizedBox(width: 8),
+              _buildBreakdownBadge('Incorrect', incorrect, AppColors.error),
+              const SizedBox(width: 8),
+              _buildBreakdownBadge('Skipped', unanswered, AppColors.textSecondary),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'SCORE PROGRESS',
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textSecondary,
                 ),
-              ],
-            ),
-          ],
-        ),
+              ),
+              Text(
+                '${pct.toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: isPassed ? AppColors.secondary : AppColors.error,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          SapienceProgressBar(
+            value: (pct / 100.0).clamp(0.0, 1.0),
+            height: 10,
+            fillColor: isPassed ? AppColors.secondary : AppColors.error,
+          ),
+        ],
       ),
     );
   }
@@ -548,22 +698,31 @@ class _StudentExamResultScreenState extends State<StudentExamResultScreen> {
   Widget _buildBreakdownBadge(String label, int count, Color color) {
     return Expanded(
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.08),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: color.withValues(alpha: 0.15)),
+          color: color.withValues(alpha: 0.09),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: color.withValues(alpha: 0.18)),
         ),
         child: Column(
           children: [
             Text(
               label.toUpperCase(),
-              style: TextStyle(color: color, fontSize: 8, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+              style: TextStyle(
+                color: color,
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.5,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               '$count',
-              style: TextStyle(color: color, fontSize: 16, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                color: color,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
             ),
           ],
         ),

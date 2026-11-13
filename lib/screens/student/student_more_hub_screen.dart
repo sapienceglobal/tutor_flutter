@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/constants.dart';
+import '../../utils/page_transitions.dart';
 import '../profile/profile_screen.dart';
 import 'student_exams_screen.dart';
-import 'student_learning_screen.dart';
 import 'student_batches_screen.dart';
 import 'assignments/student_assignments_screen.dart';
 import 'live_classes/student_live_classes_screen.dart';
@@ -12,19 +13,24 @@ import 'certificates/student_certificates_screen.dart';
 import 'analytics/student_analytics_screen.dart';
 import 'wishlist/student_wishlist_screen.dart';
 import '../tutors/tutors_screen.dart';
+import 'leaves/student_leave_requests_screen.dart';
+import 'student_practice_sets_screen.dart';
+import '../common/announcements/announcements_screen.dart';
+import '../common/chat/conversations_screen.dart';
+import '../common/notifications/notifications_screen.dart';
+import 'payments/student_payments_screen.dart';
+import '../common/subscription/personal_subscription_screen.dart';
 
 class StudentMoreHubScreen extends StatelessWidget {
   const StudentMoreHubScreen({super.key});
 
-  // Helper for resolve VPS image url bug
+  // Resolve backend media URLs consistently with web
   String _resolveImageUrl(String? path) {
-    if (path == null || path.isEmpty) {
-      return 'https://via.placeholder.com/150';
+    final resolved = ApiConfig.resolveMediaUrl(path);
+    if (resolved.isEmpty) {
+      return 'https://ui-avatars.com/api/?name=Student&background=EFEDFF&color=5B4CF0';
     }
-    if (path.startsWith('http')) return path;
-    
-    // Fallback to standard URL mapping
-    return "http://195.35.20.207:5000$path"; 
+    return resolved;
   }
 
   @override
@@ -62,14 +68,8 @@ class StudentMoreHubScreen extends StatelessWidget {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.primary.withValues(alpha: 0.3),
-                    blurRadius: 15,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
+                borderRadius: AppThemeDesign.borderRadiusLarge,
+                boxShadow: const [AppThemeDesign.brandShadow],
               ),
               child: Row(
                 children: [
@@ -173,6 +173,14 @@ class StudentMoreHubScreen extends StatelessWidget {
                   color: Colors.blue.shade700,
                   targetScreen: const StudentBatchesScreen(),
                 ),
+                _buildHubTile(
+                  context,
+                  title: 'Practice Sets',
+                  subtitle: 'Self-paced tests',
+                  icon: Icons.psychology_outlined,
+                  color: Colors.teal.shade700,
+                  targetScreen: const StudentPracticeSetsScreen(),
+                ),
               ],
             ),
             const SizedBox(height: 28),
@@ -233,6 +241,33 @@ class StudentMoreHubScreen extends StatelessWidget {
               children: [
                 _buildListTile(
                   context,
+                  title: 'Notifications Center',
+                  subtitle: 'View real-time alerts, exam updates & class reminders',
+                  icon: Icons.notifications_active_outlined,
+                  color: AppColors.primary,
+                  targetScreen: const NotificationsScreen(),
+                ),
+                const SizedBox(height: 10),
+                _buildListTile(
+                  context,
+                  title: 'Notice Board',
+                  subtitle: 'Read announcements from your teachers',
+                  icon: Icons.campaign_outlined,
+                  color: Colors.purple,
+                  targetScreen: const AnnouncementsScreen(isTutor: false),
+                ),
+                const SizedBox(height: 10),
+                _buildListTile(
+                  context,
+                  title: 'Inbox / Chat',
+                  subtitle: 'Direct messaging with your instructors',
+                  icon: Icons.forum_outlined,
+                  color: Colors.blue.shade700,
+                  targetScreen: const ConversationsScreen(),
+                ),
+                const SizedBox(height: 10),
+                _buildListTile(
+                  context,
                   title: 'My Profile Settings',
                   subtitle: 'Manage notifications, language and profile info',
                   icon: Icons.person_outline_rounded,
@@ -242,18 +277,29 @@ class StudentMoreHubScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 _buildListTile(
                   context,
+                  title: 'Leave Requests',
+                  subtitle: 'Apply for leave and track approval status',
+                  icon: Icons.event_note_rounded,
+                  color: Colors.orange.shade800,
+                  targetScreen: const StudentLeaveRequestsScreen(),
+                ),
+                const SizedBox(height: 10),
+                _buildListTile(
+                  context,
                   title: 'Billing & Payments',
                   subtitle: 'Review subscription invoices and payment history',
                   icon: Icons.credit_card_outlined,
                   color: Colors.green.shade700,
-                  onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Payments are managed securely via sapience portal.'),
-                        behavior: SnackBarBehavior.floating,
-                      ),
-                    );
-                  },
+                  targetScreen: const StudentPaymentsScreen(),
+                ),
+                const SizedBox(height: 10),
+                _buildListTile(
+                  context,
+                  title: 'Personal Subscription',
+                  subtitle: 'Upgrade membership to unlock smart AI features',
+                  icon: Icons.stars_rounded,
+                  color: Colors.amber.shade800,
+                  targetScreen: const PersonalSubscriptionScreen(),
                 ),
               ],
             ),
@@ -287,24 +333,16 @@ class StudentMoreHubScreen extends StatelessWidget {
     return GestureDetector(
       onTap: () {
         if (targetScreen != null) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => targetScreen),
-          );
+          Navigator.of(context).pushSlideUp(targetScreen);
         }
       },
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          border: Border.all(color: Colors.grey.shade100, width: 1.5),
+          borderRadius: AppThemeDesign.borderRadiusMedium,
+          boxShadow: const [AppThemeDesign.cardShadow],
+          border: Border.all(color: AppColors.cardBorder, width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -364,24 +402,16 @@ class StudentMoreHubScreen extends StatelessWidget {
         if (onTap != null) {
           onTap();
         } else if (targetScreen != null) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => targetScreen),
-          );
+          Navigator.of(context).pushSlideUp(targetScreen);
         }
       },
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-          border: Border.all(color: Colors.grey.shade100, width: 1.5),
+          borderRadius: AppThemeDesign.borderRadiusMedium,
+          boxShadow: const [AppThemeDesign.softShadow],
+          border: Border.all(color: AppColors.cardBorder, width: 1),
         ),
         child: Row(
           children: [

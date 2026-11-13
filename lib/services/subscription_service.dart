@@ -44,12 +44,37 @@ class SubscriptionService {
     );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = ApiConfig.normalizeMediaUrlsDeep(json.decode(response.body));
       if (data['success']) {
         return Institute.fromJson(data['institute']);
       }
     }
     throw Exception(json.decode(response.body)['message'] ?? 'Failed to fetch institute data');
+  }
+
+  Future<Map<String, dynamic>> createPersonalRenewalOrder(String planId) async {
+    final token = await AuthService.getToken();
+    final apiKey = await AuthService.getApiKey();
+
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/payments/renew-subscription'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'x-api-key': apiKey ?? '',
+        'Content-Type': 'application/json',
+      },
+      body: json.encode({
+        'planId': planId,
+      }),
+    );
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      final data = json.decode(response.body);
+      if (data['success']) {
+        return data;
+      }
+    }
+    throw Exception(json.decode(response.body)['message'] ?? 'Failed to initiate personal payment');
   }
 
   Future<Map<String, dynamic>> createRenewalOrder(String planId, String instituteId) async {

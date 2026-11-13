@@ -7,6 +7,7 @@ import '../../providers/course_provider.dart';
 import '../../providers/category_provider.dart';
 import '../../models/category_model.dart';
 import '../../utils/constants.dart';
+import '../../widgets/audience_selector.dart';
 
 class CreateCourseScreen extends StatefulWidget {
   const CreateCourseScreen({super.key});
@@ -27,7 +28,9 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
   String _selectedLanguage = 'English';
   bool _isFree = true;
 
-  String _visibility = 'institute';
+  String _audienceScope = 'institute';
+  List<String> _audienceBatchIds = [];
+  List<String> _audienceStudentIds = [];
   bool _requireApproval = false;
   final _maxStudentsController = TextEditingController(text: '0');
   String? _thumbnailUrl;
@@ -224,8 +227,13 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
       whatYouWillLearn: whatYouWillLearn,
       requireApproval: _requireApproval,
       maxStudents: int.tryParse(_maxStudentsController.text) ?? 0,
-      visibility: _visibility,
+      visibility: _audienceScope == 'global' ? 'public' : 'institute',
       thumbnail: _thumbnailUrl,
+      audience: {
+        'scope': _audienceScope,
+        'batchIds': _audienceBatchIds,
+        'studentIds': _audienceStudentIds,
+      },
     );
 
     if (!mounted) return;
@@ -358,23 +366,16 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
               ),
               const SizedBox(height: 16),
 
-              // Visibility Dropdown
-              DropdownButtonFormField<String>(
-                initialValue: _visibility,
-                decoration: InputDecoration(
-                  labelText: 'Visibility',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                items: const [
-                  DropdownMenuItem(value: 'public', child: Text('Public (Everyone)')),
-                  DropdownMenuItem(value: 'institute', child: Text('Institute Only')),
-                  DropdownMenuItem(value: 'private', child: Text('Private (Hidden)')),
-                ],
-                onChanged: (value) {
+              // Audience Selection Section
+              AudienceSelector(
+                initialScope: _audienceScope,
+                initialBatchIds: _audienceBatchIds,
+                initialStudentIds: _audienceStudentIds,
+                onChanged: (scope, batchIds, studentIds) {
                   setState(() {
-                    _visibility = value!;
+                    _audienceScope = scope;
+                    _audienceBatchIds = batchIds;
+                    _audienceStudentIds = studentIds;
                   });
                 },
               ),

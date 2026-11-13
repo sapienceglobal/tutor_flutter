@@ -7,6 +7,7 @@ class SubscriptionPlan {
   final String billingCycle; // monthly, yearly, etc.
   final Map<String, dynamic> features;
   final bool isActive;
+  final String planRole; // student, tutor, admin, all, both
 
   SubscriptionPlan({
     required this.id,
@@ -17,6 +18,7 @@ class SubscriptionPlan {
     required this.billingCycle,
     required this.features,
     required this.isActive,
+    this.planRole = 'all',
   });
 
   factory SubscriptionPlan.fromJson(Map<String, dynamic> json) {
@@ -29,6 +31,7 @@ class SubscriptionPlan {
       billingCycle: json['billingCycle'] ?? 'monthly',
       features: json['features'] ?? {},
       isActive: json['isActive'] ?? true,
+      planRole: json['planRole'] ?? 'all',
     );
   }
 }

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../services/live_class_service.dart';
 import '../../../services/course_service.dart';
-import '../../../services/batch_service.dart';
 import '../../../models/course_model.dart';
+import '../../../widgets/audience_selector.dart';
 
 class ScheduleLiveClassScreen extends StatefulWidget {
   const ScheduleLiveClassScreen({Key? key}) : super(key: key);
@@ -19,12 +19,14 @@ class _ScheduleLiveClassScreenState extends State<ScheduleLiveClassScreen> {
   String _title = '';
   String _description = '';
   String? _selectedCourseId;
-  String? _selectedBatchId;
   DateTime _selectedDateTime = DateTime.now().add(const Duration(hours: 1));
   int _duration = 60;
   bool _isLoading = false;
   List<CourseModel> _courses = [];
-  List<dynamic> _batches = [];
+
+  String _audienceScope = 'institute';
+  List<String> _audienceBatchIds = [];
+  List<String> _audienceStudentIds = [];
 
   @override
   void initState() {
@@ -35,10 +37,8 @@ class _ScheduleLiveClassScreenState extends State<ScheduleLiveClassScreen> {
   Future<void> _loadData() async {
     try {
       final courses = await CourseService.getMyCourses();
-      final batchRes = await BatchService.getAllBatches();
       setState(() {
         _courses = courses;
-        _batches = batchRes['batches'] ?? [];
       });
     } catch (e) {
       debugPrint('Error loading data: $e');
@@ -55,11 +55,16 @@ class _ScheduleLiveClassScreenState extends State<ScheduleLiveClassScreen> {
         'title': _title,
         'description': _description,
         'courseId': _selectedCourseId,
-        'batchId': _selectedBatchId,
+        'batchId': _audienceBatchIds.isNotEmpty ? _audienceBatchIds.first : null,
         'dateTime': _selectedDateTime.toIso8601String(),
         'duration': _duration,
         'platform': 'jitsi',
         'autoCreate': true,
+        'audience': {
+          'scope': _audienceScope,
+          'batchIds': _audienceBatchIds,
+          'studentIds': _audienceStudentIds,
+        },
       });
 
       if (success && mounted) {
@@ -127,11 +132,18 @@ class _ScheduleLiveClassScreenState extends State<ScheduleLiveClassScreen> {
                       validator: (val) => val == null ? 'Select course' : null,
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<String>(
-                      decoration: const InputDecoration(labelText: 'Batch (Optional)', border: OutlineInputBorder()),
-                      initialValue: _selectedBatchId,
-                      items: _batches.map((b) => DropdownMenuItem<String>(value: b['_id'] as String, child: Text(b['name'] as String))).toList(),
-                      onChanged: (val) => setState(() => _selectedBatchId = val),
+                    AudienceSelector(
+                      initialScope: _audienceScope,
+                      initialBatchIds: _audienceBatchIds,
+                      initialStudentIds: _audienceStudentIds,
+                      courseId: _selectedCourseId,
+                      onChanged: (scope, batchIds, studentIds) {
+                        setState(() {
+                          _audienceScope = scope;
+                          _audienceBatchIds = batchIds;
+                          _audienceStudentIds = studentIds;
+                        });
+                      },
                     ),
                     const SizedBox(height: 16),
                     ListTile(

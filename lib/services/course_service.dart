@@ -160,6 +160,7 @@ class CourseService {
     bool requireApproval = false,
     int maxStudents = 0,
     String visibility = 'institute',
+    Map<String, dynamic>? audience,
   }) async {
     try {
       final token = await AuthService.getToken();
@@ -183,6 +184,7 @@ class CourseService {
             'maxStudents': maxStudents,
           },
           'visibility': visibility,
+          if (audience != null) 'audience': audience,
         },
         token: token,
       );

@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/course_provider.dart';
 import '../../services/enrollment_service.dart';
 import '../../utils/constants.dart';
+import '../../widgets/sapience_ui.dart';
 
 class TutorStudentsScreen extends StatefulWidget {
   const TutorStudentsScreen({super.key});
@@ -68,10 +69,17 @@ class _TutorStudentsScreenState extends State<TutorStudentsScreen> {
     final courseProvider = Provider.of<CourseProvider>(context);
     final myCourses = courseProvider.myCourses;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('My Students')),
-      body: Column(
-        children: [
+    return SapienceBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              const SapienceHeader(title: 'My Students'),
+              Expanded(
+                child: Column(
+                  children: [
           // Course Filter
           if (myCourses.isNotEmpty)
             Container(
@@ -82,7 +90,7 @@ class _TutorStudentsScreenState extends State<TutorStudentsScreen> {
                   labelText: 'Filter by Course',
                   prefixIcon: const Icon(Icons.school),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius: AppThemeDesign.borderRadiusMedium,
                   ),
                   filled: true,
                   fillColor: Colors.grey[50],
@@ -121,8 +129,10 @@ class _TutorStudentsScreenState extends State<TutorStudentsScreen> {
               margin: const EdgeInsets.symmetric(horizontal: 16),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                borderRadius: AppThemeDesign.borderRadiusMedium,
+                boxShadow: const [AppThemeDesign.cardShadow],
+                border: Border.all(color: AppColors.primary.withOpacity(0.12), width: 1.5),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -157,6 +167,11 @@ class _TutorStudentsScreenState extends State<TutorStudentsScreen> {
           // Students List
           Expanded(child: _buildStudentsList()),
         ],
+      ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -249,14 +264,9 @@ class _TutorStudentsScreenState extends State<TutorStudentsScreen> {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        borderRadius: AppThemeDesign.borderRadiusMedium,
+        boxShadow: const [AppThemeDesign.cardShadow],
+        border: Border.all(color: Colors.grey.shade100, width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

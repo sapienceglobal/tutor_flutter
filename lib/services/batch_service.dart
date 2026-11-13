@@ -48,4 +48,14 @@ class BatchService {
       throw Exception(e.toString());
     }
   }
+
+  // Get single batch by ID
+  static Future<Map<String, dynamic>> getBatchById(String id) async {
+    try {
+      final token = await AuthService.getToken();
+      return await ApiService.get('$_endpoint/$id', token: token);
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
 }

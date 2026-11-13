@@ -4,6 +4,7 @@ import '../../../models/course_model.dart';
 import '../../../models/exam_model.dart';
 import '../../../services/exam_service.dart';
 import '../../../utils/constants.dart';
+import '../../../widgets/sapience_ui.dart';
 
 
 class ManageExamsScreen extends StatefulWidget {
@@ -53,90 +54,76 @@ class _ManageExamsScreenState extends State<ManageExamsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manage Exams'),
-        elevation: 0,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadExams,
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          _buildFilterChips(),
-          Expanded(
-            child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : _filteredExams.isEmpty
-                    ? _buildEmptyState()
-                    : RefreshIndicator(
-                        onRefresh: _loadExams,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _filteredExams.length,
-                          itemBuilder: (context, index) {
-                            return _buildExamCard(_filteredExams[index]);
-                          },
+    const statuses = ['all', 'draft', 'published', 'archived'];
+    final currentTab = statuses.indexOf(_filterStatus).clamp(0, 3);
+
+    return SapienceBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              SapienceHeader(
+                title: 'Manage Exams',
+                actions: [
+                  Material(
+                    color: AppColors.primary,
+                    borderRadius: BorderRadius.circular(14),
+                    child: InkWell(
+                      onTap: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) =>
+                                CreateExamScreen(course: widget.course),
+                          ),
+                        );
+                        if (result == true) _loadExams();
+                      },
+                      borderRadius: BorderRadius.circular(14),
+                      child: const SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: Icon(
+                          Icons.add_rounded,
+                          color: Colors.white,
+                          size: 22,
                         ),
                       ),
+                    ),
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+                child: SapienceSegmentedTabs(
+                  tabs: const ['All', 'Draft', 'Published', 'Archived'],
+                  currentIndex: currentTab,
+                  onChanged: (idx) =>
+                      setState(() => _filterStatus = statuses[idx]),
+                ),
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _filteredExams.isEmpty
+                        ? _buildEmptyState()
+                        : RefreshIndicator(
+                            color: AppColors.primary,
+                            onRefresh: _loadExams,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                              itemCount: _filteredExams.length,
+                              itemBuilder: (context, index) {
+                                return _buildExamCard(_filteredExams[index]);
+                              },
+                            ),
+                          ),
+              ),
+            ],
           ),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => CreateExamScreen(course: widget.course),
-            ),
-          );
-          if (result == true) _loadExams();
-        },
-        icon: const Icon(Icons.add),
-        label: const Text('Create Exam'),
-        backgroundColor: AppColors.primary,
-      ),
-    );
-  }
-
-  Widget _buildFilterChips() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      color: Colors.grey[100],
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            _buildFilterChip('All', 'all'),
-            const SizedBox(width: 8),
-            _buildFilterChip('Draft', 'draft'),
-            const SizedBox(width: 8),
-            _buildFilterChip('Published', 'published'),
-            const SizedBox(width: 8),
-            _buildFilterChip('Archived', 'archived'),
-          ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildFilterChip(String label, String value) {
-    final isSelected = _filterStatus == value;
-    return FilterChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (selected) {
-        setState(() => _filterStatus = value);
-      },
-      backgroundColor: Colors.white,
-      selectedColor: AppColors.primary.withOpacity(0.2),
-      checkmarkColor: AppColors.primary,
-      labelStyle: TextStyle(
-        color: isSelected ? AppColors.primary : Colors.black87,
-        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
       ),
     );
   }
@@ -182,12 +169,16 @@ class _ManageExamsScreenState extends State<ManageExamsScreen> {
     final statusColor = _getStatusColor(exam.status);
     final typeIcon = _getTypeIcon(exam.type);
 
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppThemeDesign.borderRadiusMedium,
+        boxShadow: const [AppThemeDesign.cardShadow],
+        border: Border.all(color: Colors.grey.shade100, width: 1),
+      ),
       child: InkWell(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppThemeDesign.borderRadiusMedium,
         onTap: () => _viewExamDetails(exam),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -415,6 +406,7 @@ class _ManageExamsScreenState extends State<ManageExamsScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
         title: Text(exam.title),
         content: SingleChildScrollView(
           child: Column(
@@ -508,6 +500,7 @@ class _ManageExamsScreenState extends State<ManageExamsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
         title: const Text('Delete Exam'),
         content: Text('Delete "${exam.title}"? This cannot be undone.'),
         actions: [

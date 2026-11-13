@@ -7,6 +7,7 @@ import '../../models/lesson_model.dart';
 import '../../services/lesson_service.dart';
 import '../../services/upload_service.dart';
 import '../../utils/constants.dart';
+import '../../widgets/sapience_ui.dart';
 
 
 class ManageLessonsScreen extends StatefulWidget {
@@ -64,27 +65,37 @@ class _ManageLessonsScreenState extends State<ManageLessonsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Manage Lessons'),
-        elevation: 0,
+    return SapienceBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        body: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              SapienceHeader(title: widget.course.title),
+              Expanded(
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : widget.course.modules.isEmpty
+                        ? _buildEmptyModules()
+                        : RefreshIndicator(
+                            color: AppColors.primary,
+                            onRefresh: _loadLessons,
+                            child: ListView.builder(
+                              padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                              itemCount: widget.course.modules.length,
+                              itemBuilder: (context, index) {
+                                final module = widget.course.modules[index];
+                                final lessons = _lessonsByModule[module.id] ?? [];
+                                return _buildModuleCard(module, lessons);
+                              },
+                            ),
+                          ),
+              ),
+            ],
+          ),
+        ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : widget.course.modules.isEmpty
-              ? _buildEmptyModules()
-              : RefreshIndicator(
-                  onRefresh: _loadLessons,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: widget.course.modules.length,
-                    itemBuilder: (context, index) {
-                      final module = widget.course.modules[index];
-                      final lessons = _lessonsByModule[module.id] ?? [];
-                      return _buildModuleCard(module, lessons);
-                    },
-                  ),
-                ),
     );
   }
 
@@ -116,10 +127,14 @@ class _ManageLessonsScreenState extends State<ManageLessonsScreen> {
   }
 
   Widget _buildModuleCard(CourseModule module, List<LessonModel> lessons) {
-    return Card(
+    return Container(
       margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppThemeDesign.borderRadiusMedium,
+        boxShadow: const [AppThemeDesign.cardShadow],
+        border: Border.all(color: Colors.grey.shade100, width: 1),
+      ),
       child: ExpansionTile(
         tilePadding: const EdgeInsets.all(16),
         childrenPadding: const EdgeInsets.only(bottom: 12),
@@ -304,6 +319,7 @@ class _ManageLessonsScreenState extends State<ManageLessonsScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
+              shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
               title: Text(title),
               content: SingleChildScrollView(
                 child: SizedBox(
@@ -746,6 +762,7 @@ class _ManageLessonsScreenState extends State<ManageLessonsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
         title: const Text('Delete Lesson'),
         content: Text('Delete "${lesson.title}"?'),
         actions: [

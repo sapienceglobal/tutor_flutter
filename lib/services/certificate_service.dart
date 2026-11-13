@@ -18,7 +18,7 @@ class CertificateService {
     );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = ApiConfig.normalizeMediaUrlsDeep(json.decode(response.body));
       if (data['success'] && data['data'] != null) {
         return (data['data'] as List)
             .map((json) => Certificate.fromJson(json))
@@ -41,7 +41,7 @@ class CertificateService {
     );
 
     if (response.statusCode == 200) {
-      final data = json.decode(response.body);
+      final data = ApiConfig.normalizeMediaUrlsDeep(json.decode(response.body));
       if (data['courses'] != null) {
         return (data['courses'] as List)
             .map((json) => InProgressCourse.fromJson(json))

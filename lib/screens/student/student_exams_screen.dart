@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import '../../services/exam_service.dart';
 import '../../utils/constants.dart';
+import '../../utils/page_transitions.dart';
+import '../../widgets/error_retry.dart';
+import '../../widgets/sapience_ui.dart';
+import '../../widgets/shimmer_loader.dart';
+import 'analytics/student_analytics_screen.dart';
 import 'exam_instructions_screen.dart';
 import 'student_exam_result_screen.dart';
+import 'student_practice_sets_screen.dart';
 
 class StudentExamsScreen extends StatefulWidget {
   final bool embedded;
@@ -14,7 +20,9 @@ class StudentExamsScreen extends StatefulWidget {
 
 class _StudentExamsScreenState extends State<StudentExamsScreen> {
   bool _isLoading = true;
+  String? _errorMessage;
   List<dynamic> _exams = [];
+  int _tabIndex = 0; // 0: All Tests, 1: Available, 2: Completed
 
   @override
   void initState() {
@@ -23,26 +31,34 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
   }
 
   Future<void> _fetchExams() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
       final res = await ExamService.getAllStudentExams();
-      if (res['success']) {
-        setState(() {
-          _exams = res['exams'] ?? [];
-        });
+      if (!mounted) return;
+      if (res['success'] == true) {
+        setState(() => _exams = res['exams'] ?? []);
+      } else {
+        setState(() => _errorMessage = res['message'] ?? 'Failed to load exams');
       }
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading exams: $e')),
-        );
-      }
+      if (mounted) setState(() => _errorMessage = e.toString());
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  /// Gate check before opening any exam
+  List<dynamic> get _filteredExams {
+    if (_tabIndex == 1) {
+      return _exams.where((e) => (e['attemptCount'] ?? 0) == 0).toList();
+    } else if (_tabIndex == 2) {
+      return _exams.where((e) => (e['attemptCount'] ?? 0) > 0).toList();
+    }
+    return _exams;
+  }
+
   Future<void> _attemptExam(dynamic exam) async {
     final examId = exam['_id'];
     final int attemptCount = exam['attemptCount'] ?? 0;
@@ -50,7 +66,6 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
     final String? startDateStr = exam['startDate'];
     final String? endDateStr = exam['endDate'];
 
-    // 1. Schedule enforcement
     if (isScheduled) {
       final now = DateTime.now();
       if (startDateStr != null) {
@@ -59,8 +74,8 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
           _showBlockedDialog(
             'Exam Not Available Yet',
             'This exam starts on ${_formatDate(start)}. Please come back later.',
-            Icons.schedule,
-            Colors.orange,
+            Icons.schedule_rounded,
+            AppColors.warning,
           );
           return;
         }
@@ -71,26 +86,29 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
           _showBlockedDialog(
             'Exam Expired',
             'This exam ended on ${_formatDate(end)}. You can no longer take it.',
-            Icons.event_busy,
-            Colors.red,
+            Icons.event_busy_rounded,
+            AppColors.error,
           );
           return;
         }
       }
     }
 
-    // 2. Attempt limit check via backend
     try {
-      _showLoadingOverlay();
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
       final canAttemptRes = await ExamService.checkCanAttempt(examId);
-      if (mounted) Navigator.of(context).pop(); // close loading overlay
+      if (mounted) Navigator.of(context).pop();
 
       if (canAttemptRes['success'] != true) {
         _showBlockedDialog(
           'Error',
           canAttemptRes['message'] ?? 'Unable to verify exam eligibility.',
-          Icons.error_outline,
-          Colors.red,
+          Icons.error_outline_rounded,
+          AppColors.error,
         );
         return;
       }
@@ -103,59 +121,51 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
         _showBlockedDialog(
           'Maximum Attempts Reached',
           'You have used all $existingAttempts of $maxAttempts allowed attempts for this exam.',
-          Icons.block,
-          Colors.red,
+          Icons.block_rounded,
+          AppColors.error,
         );
         return;
       }
 
-      // 3. All checks passed — navigate to instructions screen
       if (mounted) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ExamInstructionsScreen(
-              examId: examId,
-              existingAttempts: existingAttempts,
-              maxAttempts: maxAttempts,
-            ),
+        Navigator.of(context).pushSlideUp(
+          ExamInstructionsScreen(
+            examId: examId,
+            existingAttempts: existingAttempts,
+            maxAttempts: maxAttempts,
           ),
         ).then((_) => _fetchExams());
       }
     } catch (e) {
-      if (mounted) Navigator.of(context).pop(); // close loading overlay
+      if (mounted) Navigator.of(context).pop();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
-  }
-
-  void _showLoadingOverlay() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
   }
 
   void _showBlockedDialog(String title, String message, IconData icon, Color color) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         title: Row(
           children: [
-            Icon(icon, color: color, size: 28),
-            const SizedBox(width: 12),
-            Expanded(child: Text(title, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color))),
+            Icon(icon, color: color, size: 26),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.navy),
+              ),
+            ),
           ],
         ),
-        content: Text(message, style: const TextStyle(fontSize: 14, height: 1.5)),
+        content: Text(message, style: const TextStyle(fontSize: 14, color: AppColors.textBody, height: 1.45)),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
+            child: const Text('OK', style: TextStyle(fontWeight: FontWeight.w700)),
           ),
         ],
       ),
@@ -163,319 +173,269 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
   }
 
   String _formatDate(DateTime date) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return '${date.day} ${months[date.month - 1]} ${date.year}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final body = _isLoading
-        ? const Center(child: CircularProgressIndicator())
-        : _exams.isEmpty
-            ? _buildEmptyState()
-            : RefreshIndicator(
-                onRefresh: _fetchExams,
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: _exams.length,
-                  itemBuilder: (context, index) {
-                    final exam = _exams[index];
-                    return _buildExamCard(exam);
-                  },
-                ),
-              );
-
-    if (widget.embedded) return body;
+    final exams = _filteredExams;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('My Exams'),
-        backgroundColor: Colors.white,
-        foregroundColor: Colors.black,
-        elevation: 1,
+      body: SapienceBackground(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              SapienceHeader(
+                title: 'Tests & Exams',
+                leading: widget.embedded ? const SizedBox(width: 40) : null,
+                actions: [
+                  IconButton(
+                    tooltip: 'Practice Sets',
+                    icon: const Icon(Icons.quiz_outlined, color: AppColors.navy, size: 23),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const StudentPracticeSetsScreen()),
+                    ),
+                    splashRadius: 20,
+                  ),
+                  IconButton(
+                    tooltip: 'Performance',
+                    icon: const Icon(Icons.workspace_premium_outlined, color: AppColors.navy, size: 25),
+                    onPressed: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const StudentAnalyticsScreen()),
+                    ),
+                    splashRadius: 20,
+                  ),
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                child: SapienceSegmentedTabs(
+                  tabs: const ['All Tests', 'Available', 'Completed'],
+                  currentIndex: _tabIndex,
+                  flat: true,
+                  onChanged: (i) => setState(() => _tabIndex = i),
+                ),
+              ),
+              Expanded(
+                child: _isLoading
+                    ? const ShimmerListView(itemCount: 5)
+                    : _errorMessage != null
+                        ? ErrorRetryWidget(
+                            message: _errorMessage!,
+                            onRetry: _fetchExams,
+                          )
+                        : RefreshIndicator(
+                            color: AppColors.primary,
+                            onRefresh: _fetchExams,
+                            child: exams.isEmpty
+                                ? ListView(
+                                    physics: const AlwaysScrollableScrollPhysics(),
+                                    children: [
+                                      const SizedBox(height: 60),
+                                      SapienceCard(
+                                        margin: const EdgeInsets.symmetric(horizontal: 24),
+                                        padding: const EdgeInsets.all(24),
+                                        child: const Column(
+                                          children: [
+                                            Icon(Icons.assignment_turned_in_rounded,
+                                                size: 48, color: AppColors.primary),
+                                            SizedBox(height: 12),
+                                            Text(
+                                              'No tests available right now',
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w800,
+                                                color: AppColors.navy,
+                                              ),
+                                            ),
+                                            SizedBox(height: 4),
+                                            Text(
+                                              'Tests assigned in your courses or institute will appear here.',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(fontSize: 13, color: AppColors.textMuted),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : ListView.separated(
+                                    physics: const AlwaysScrollableScrollPhysics(),
+                                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                                    itemCount: exams.length,
+                                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                                    itemBuilder: (_, i) => _buildExamCard(exams[i], i),
+                                  ),
+                          ),
+              ),
+            ],
+          ),
+        ),
       ),
-      body: body,
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.assignment_outlined, size: 80, color: Colors.grey[400]),
-          const SizedBox(height: 16),
-          Text(
-            'No Exams Found',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[600],
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Exams from your enrolled courses will appear here.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.grey[500]),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildExamCard(dynamic exam) {
+  Widget _buildExamCard(dynamic exam, int index) {
+    final title = exam['title']?.toString() ?? 'Untitled Exam';
+    final totalQuestions = exam['totalQuestions'] ?? 0;
+    final duration = exam['duration'] ?? 30;
     final int attemptCount = exam['attemptCount'] ?? 0;
-    final lastAttempt = exam['lastAttempt'];
-    final bool isScheduled = exam['isScheduled'] ?? false;
-    final String? startDateStr = exam['startDate'];
-    final String? endDateStr = exam['endDate'];
+    final int maxAttempts = exam['maxAttempts'] ?? 1;
+    final String lastAttemptId =
+        (exam['lastAttemptId'] ?? exam['lastAttempt']?['_id'] ?? '').toString();
+    final bool hasAttempts = attemptCount > 0 && lastAttemptId.isNotEmpty;
+    final bool hasRemainingAttempts = attemptCount < maxAttempts;
 
-    // Determine exam status for UI
-    _ExamStatus status = _ExamStatus.available;
-    String buttonText = 'Start Exam';
-    Color buttonColor = AppColors.primary;
-    bool buttonEnabled = true;
-
-    // Check schedule
-    if (isScheduled) {
-      final now = DateTime.now();
-      if (startDateStr != null) {
-        final start = DateTime.tryParse(startDateStr);
-        if (start != null && now.isBefore(start)) {
-          status = _ExamStatus.notStarted;
-          buttonText = 'Starts ${_formatDate(start)}';
-          buttonColor = Colors.grey;
-          buttonEnabled = false;
-        }
+    final bool isScheduled = exam['isScheduled'] == true;
+    final now = DateTime.now();
+    bool isLockedSchedule = false;
+    if (isScheduled && exam['startDate'] != null) {
+      final start = DateTime.tryParse(exam['startDate'].toString());
+      if (start != null && now.isBefore(start)) {
+        isLockedSchedule = true;
       }
-      if (endDateStr != null && status == _ExamStatus.available) {
-        final end = DateTime.tryParse(endDateStr);
-        if (end != null && now.isAfter(end)) {
-          status = _ExamStatus.expired;
-          buttonText = 'Expired';
-          buttonColor = Colors.red.shade300;
-          buttonEnabled = false;
-        }
+    }
+    if (isScheduled && exam['endDate'] != null) {
+      final end = DateTime.tryParse(exam['endDate'].toString());
+      if (end != null && now.isAfter(end) && !hasAttempts) {
+        isLockedSchedule = true;
       }
     }
 
-    // Check attempt status (only if schedule allows)
-    bool isCompletedState = false;
-    if (status == _ExamStatus.available) {
-      if (attemptCount > 0 && lastAttempt != null) {
-        status = _ExamStatus.attempted;
-        buttonText = 'View Result';
-        buttonColor = Colors.teal;
-        isCompletedState = true;
-      }
-    }
+    final bool isLocked = isLockedSchedule || (!hasAttempts && !hasRemainingAttempts);
 
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 2,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
+    const badgePalettes = [
+      (bg: Color(0xFFE2EEFF), fg: Color(0xFF0B5CFF), icon: Icons.code_rounded),
+      (bg: Color(0xFFFFE8E8), fg: Color(0xFFEA580C), icon: Icons.terminal_rounded),
+      (bg: Color(0xFFDDF6FB), fg: Color(0xFF0A9FCF), icon: Icons.science_rounded),
+      (bg: Color(0xFFEFE7FD), fg: Color(0xFF7C3AED), icon: Icons.storage_rounded),
+      (bg: Color(0xFFFFF0D8), fg: Color(0xFFE68A00), icon: Icons.design_services_rounded),
+    ];
+    final badge = badgePalettes[index % badgePalettes.length];
+
+    return SapienceCard(
+      borderRadius: 20,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      child: Row(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: badge.bg,
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(badge.icon, color: badge.fg, size: 32),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(Icons.assignment, color: AppColors.primary),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        exam['title'] ?? 'Exam',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        exam['courseTitle'] ?? '',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey[600],
-                        ),
-                      ),
-                    ],
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                    letterSpacing: -0.2,
                   ),
                 ),
-                _buildStatusBadge(status, lastAttempt),
-              ],
-            ),
-
-            // Last attempt score
-            if (lastAttempt != null) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                decoration: BoxDecoration(
-                  color: (lastAttempt['isPassed'] ?? false)
-                      ? Colors.green.withValues(alpha: 0.08)
-                      : Colors.orange.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: (lastAttempt['isPassed'] ?? false)
-                        ? Colors.green.withValues(alpha: 0.3)
-                        : Colors.orange.withValues(alpha: 0.3),
-                  ),
-                ),
-                child: Row(
+                const SizedBox(height: 5),
+                Row(
                   children: [
-                    Icon(
-                      (lastAttempt['isPassed'] ?? false) ? Icons.check_circle : Icons.info_outline,
-                      size: 16,
-                      color: (lastAttempt['isPassed'] ?? false) ? Colors.green : Colors.orange,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Last Score: ${lastAttempt['score'] ?? '—'} • ${(lastAttempt['isPassed'] ?? false) ? 'Passed ✅' : 'Not Passed'}',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: (lastAttempt['isPassed'] ?? false) ? Colors.green[800] : Colors.orange[800],
+                    const Icon(Icons.description_outlined, size: 15, color: AppColors.navy),
+                    const SizedBox(width: 5),
+                    Expanded(
+                      child: Text(
+                        '$totalQuestions Questions • $duration Mins',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.textBody,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
                 ),
-              ),
-            ],
-
-            const SizedBox(height: 16),
-            const Divider(height: 1),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                _buildStatInfo(Icons.timer_outlined, '${exam['duration'] ?? 0} Mins'),
-                _buildStatInfo(Icons.format_list_numbered, '${exam['totalQuestions'] ?? 0} Qs'),
-                _buildStatInfo(Icons.replay, 'Attempts: $attemptCount'),
+                if (hasAttempts) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      const Icon(Icons.check_circle_rounded, size: 14, color: AppColors.success),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Attempted ($attemptCount/$maxAttempts)',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
-            const SizedBox(height: 16),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: buttonEnabled
-                    ? () {
-                        if (isCompletedState) {
-                          final String? attemptId = exam['lastAttemptId'] ?? (lastAttempt != null ? lastAttempt['_id']?.toString() : null);
-                          if (attemptId != null) {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => StudentExamResultScreen(attemptId: attemptId),
-                              ),
-                            ).then((_) => _fetchExams());
-                          } else {
-                            _attemptExam(exam);
-                          }
-                        } else {
-                          _attemptExam(exam);
-                        }
-                      }
-                    : null,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: buttonColor,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey[300],
-                  disabledForegroundColor: Colors.grey[600],
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+          ),
+          const SizedBox(width: 8),
+          if (isLocked)
+            SapiencePlayCircle(
+              locked: true,
+              size: 44,
+              onTap: () => _attemptExam(exam),
+            )
+          else if (hasAttempts)
+            Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SapienceButton(
+                  label: 'Result',
+                  variant: SapienceButtonVariant.green,
+                  height: 34,
+                  fontSize: 13,
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  onTap: () => Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                        builder: (_) => StudentExamResultScreen(attemptId: lastAttemptId)),
                   ),
                 ),
-                child: Text(
-                  buttonText,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ),
+                if (hasRemainingAttempts) ...[
+                  const SizedBox(height: 5),
+                  GestureDetector(
+                    onTap: () => _attemptExam(exam),
+                    child: const Text(
+                      'Retake',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ],
+            )
+          else
+            SapienceButton(
+              label: 'Start',
+              variant: SapienceButtonVariant.blue,
+              height: 38,
+              fontSize: 14.5,
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              onTap: () => _attemptExam(exam),
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
-
-  Widget _buildStatusBadge(_ExamStatus status, dynamic lastAttempt) {
-    switch (status) {
-      case _ExamStatus.attempted:
-        final passed = lastAttempt?['isPassed'] ?? false;
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: passed ? Colors.green.withValues(alpha: 0.1) : Colors.orange.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Text(
-            passed ? 'Passed' : 'Attempted',
-            style: TextStyle(
-              color: passed ? Colors.green : Colors.orange,
-              fontSize: 12,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-        );
-      case _ExamStatus.expired:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.red.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Text(
-            'Expired',
-            style: TextStyle(color: Colors.red, fontSize: 12, fontWeight: FontWeight.bold),
-          ),
-        );
-      case _ExamStatus.notStarted:
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.blue.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Text(
-            'Upcoming',
-            style: TextStyle(color: Colors.blue, fontSize: 12, fontWeight: FontWeight.bold),
-          ),
-        );
-      case _ExamStatus.available:
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  Widget _buildStatInfo(IconData icon, String text) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: Colors.grey[600]),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: TextStyle(
-            fontSize: 13,
-            color: Colors.grey[800],
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
-  }
 }
-
-enum _ExamStatus { available, attempted, expired, notStarted }

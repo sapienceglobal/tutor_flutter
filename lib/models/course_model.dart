@@ -54,6 +54,7 @@ class CourseModel {
   final List<String> whatYouWillLearn;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final Map<String, dynamic>? audience;
 
   CourseModel({
     required this.id,
@@ -76,6 +77,7 @@ class CourseModel {
     this.whatYouWillLearn = const [],
     required this.createdAt,
     required this.updatedAt,
+    this.audience,
   });
 
   factory CourseModel.fromJson(Map<String, dynamic> json) {
@@ -165,6 +167,7 @@ class CourseModel {
         updatedAt: json['updatedAt'] != null
             ? DateTime.parse(json['updatedAt'])
             : DateTime.now(),
+        audience: json['audience'],
       );
 
       print('✅ CourseModel parsed successfully: ${course.title}');
@@ -200,6 +203,7 @@ class CourseModel {
       'whatYouWillLearn': whatYouWillLearn,
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
+      'audience': audience,
     };
   }
 }

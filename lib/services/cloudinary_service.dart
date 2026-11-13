@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'dart:convert';
+import 'api_service.dart';
 import 'auth_service.dart';
 import '../config/api_config.dart';
 
@@ -18,13 +19,16 @@ class CloudinaryService {
       final request = http.MultipartRequest('POST', url);
 
       request.headers['Authorization'] = 'Bearer $token';
+      request.headers['x-api-key'] = ApiService.apiKey;
+      request.headers['x-client-platform'] = 'mobile';
 
       String mimeType = '';
-      if (imageFile.path.endsWith('.png')) {
+      final lowerPath = imageFile.path.toLowerCase();
+      if (lowerPath.endsWith('.png')) {
         mimeType = 'png';
-      } else if (imageFile.path.endsWith('.jpg') || imageFile.path.endsWith('.jpeg')) {
+      } else if (lowerPath.endsWith('.jpg') || lowerPath.endsWith('.jpeg')) {
         mimeType = 'jpeg';
-      } else if (imageFile.path.endsWith('.webp')) {
+      } else if (lowerPath.endsWith('.webp')) {
         mimeType = 'webp';
       } else {
         mimeType = 'jpeg';
@@ -43,7 +47,8 @@ class CloudinaryService {
       final body = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {
-        final jsonData = jsonDecode(body);
+        final rawData = jsonDecode(body);
+        final jsonData = ApiConfig.normalizeMediaUrlsDeep(rawData) as Map<String, dynamic>;
         print('✅ Upload successful!');
         return {
           'url': jsonData['url'],
@@ -67,6 +72,8 @@ class CloudinaryService {
       final url = Uri.parse('${ApiConfig.baseUrl}/upload/file');
       final request = http.MultipartRequest('POST', url);
       request.headers['Authorization'] = 'Bearer $token';
+      request.headers['x-api-key'] = ApiService.apiKey;
+      request.headers['x-client-platform'] = 'mobile';
 
       request.files.add(
         await http.MultipartFile.fromPath(
@@ -79,7 +86,8 @@ class CloudinaryService {
       final body = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {
-        return jsonDecode(body);
+        final rawData = jsonDecode(body);
+        return ApiConfig.normalizeMediaUrlsDeep(rawData) as Map<String, dynamic>;
       } else {
         return null;
       }

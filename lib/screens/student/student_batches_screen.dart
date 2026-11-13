@@ -3,6 +3,7 @@ import '../../services/api_service.dart';
 import '../../services/auth_service.dart';
 import '../../config/api_config.dart';
 import '../../utils/constants.dart';
+import 'attendance/student_batch_attendance_screen.dart';
 
 class StudentBatchesScreen extends StatefulWidget {
   const StudentBatchesScreen({super.key});
@@ -354,6 +355,27 @@ class _StudentBatchesScreenState extends State<StudentBatchesScreen> with Single
                       elevation: 0,
                     ),
                     child: const Text('Join Batch', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  ),
+                if (isEnrolled)
+                  OutlinedButton.icon(
+                    onPressed: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => StudentBatchAttendanceScreen(
+                            batchId: batchId,
+                            batchName: batchName,
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.fact_check_outlined, size: 14),
+                    label: const Text('Attendance', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: AppColors.primary,
+                      side: const BorderSide(color: AppColors.primary),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
                   ),
               ],
             ),

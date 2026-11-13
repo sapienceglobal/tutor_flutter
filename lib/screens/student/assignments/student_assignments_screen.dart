@@ -2,6 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../models/assignment_model.dart';
 import '../../../services/assignment_service.dart';
+import '../../../widgets/shimmer_loader.dart';
+import '../../../widgets/empty_state.dart';
+import '../../../widgets/error_retry.dart';
+import '../../../utils/page_transitions.dart';
 import 'assignment_details_screen.dart';
 
 class StudentAssignmentsScreen extends StatefulWidget {
@@ -17,6 +21,7 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> wit
   
   List<Assignment> _allAssignments = [];
   bool _isLoading = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -26,7 +31,10 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> wit
   }
 
   Future<void> _loadAssignments() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
       final assignments = await _assignmentService.fetchAssignments();
       setState(() {
@@ -34,15 +42,36 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> wit
         _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+      setState(() {
+        _errorMessage = e.toString();
+        _isLoading = false;
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Assignments'),
+        ),
+        body: const ShimmerListView(itemCount: 5),
+      );
+    }
+
+    if (_errorMessage != null) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Assignments'),
+        ),
+        body: ErrorRetryWidget(
+          message: _errorMessage!,
+          onRetry: _loadAssignments,
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Assignments'),
@@ -57,23 +86,21 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> wit
           ],
         ),
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : TabBarView(
-              controller: _tabController,
-              children: [
-                _buildAssignmentList(_allAssignments),
-                _buildAssignmentList(_allAssignments.filterByStatus('pending')),
-                _buildAssignmentList(_allAssignments.filterByStatus('submitted')),
-                _buildAssignmentList(_allAssignments.filterByStatus('graded')),
-              ],
-            ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _buildAssignmentList(_allAssignments),
+          _buildAssignmentList(_allAssignments.filterByStatus('pending')),
+          _buildAssignmentList(_allAssignments.filterByStatus('submitted')),
+          _buildAssignmentList(_allAssignments.filterByStatus('graded')),
+        ],
+      ),
     );
   }
 
   Widget _buildAssignmentList(List<Assignment> assignments) {
     if (assignments.isEmpty) {
-      return const Center(child: Text('No assignments found.'));
+      return const EmptyAssignmentsState();
     }
 
     return RefreshIndicator(
@@ -125,9 +152,8 @@ class _StudentAssignmentsScreenState extends State<StudentAssignmentsScreen> wit
                 ],
               ),
               onTap: () async {
-                final result = await Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (context) => AssignmentDetailsScreen(assignmentId: a.id)),
+                final result = await Navigator.of(context).pushSlideUp(
+                  AssignmentDetailsScreen(assignmentId: a.id),
                 );
                 if (result == true) _loadAssignments();
               },

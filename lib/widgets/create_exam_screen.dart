@@ -5,6 +5,7 @@ import '../services/exam_service.dart';
 import '../services/ai_service.dart';
 import '../utils/constants.dart';
 import 'feature_gate.dart';
+import 'audience_selector.dart';
 
 class CreateExamScreen extends StatefulWidget {
   final CourseModel course;
@@ -48,6 +49,10 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
   bool _isLoading = false;
   bool _isSaving = false;
 
+  String _audienceScope = 'institute';
+  List<String> _audienceBatchIds = [];
+  List<String> _audienceStudentIds = [];
+
   @override
   void initState() {
     super.initState();
@@ -79,6 +84,11 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
     _startDate = widget.existingExam!.startDate;
     _endDate = exam.endDate;
     _questions = List.from(exam.questions);
+
+    final aud = exam.audience ?? {};
+    _audienceScope = aud['scope'] ?? 'institute';
+    _audienceBatchIds = List<String>.from(aud['batchIds'] ?? []);
+    _audienceStudentIds = List<String>.from(aud['studentIds'] ?? []);
   }
 
   @override
@@ -408,6 +418,22 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
                 },
               ),
             ],
+            const SizedBox(height: 16),
+            const Divider(),
+            const SizedBox(height: 8),
+            AudienceSelector(
+              initialScope: _audienceScope,
+              initialBatchIds: _audienceBatchIds,
+              initialStudentIds: _audienceStudentIds,
+              courseId: widget.course.id,
+              onChanged: (scope, batchIds, studentIds) {
+                setState(() {
+                  _audienceScope = scope;
+                  _audienceBatchIds = batchIds;
+                  _audienceStudentIds = studentIds;
+                });
+              },
+            ),
           ],
         ),
       ),
@@ -816,6 +842,12 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
 
       Map<String, dynamic> response;
 
+      final audienceMap = {
+        'scope': _audienceScope,
+        'batchIds': _audienceBatchIds,
+        'studentIds': _audienceStudentIds,
+      };
+
       if (widget.existingExam == null) {
         response = await ExamService.createExam(
           courseId: widget.course.id,
@@ -839,6 +871,7 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
           hideSolutions: _hideSolutions,
           startDate: _startDate,
           endDate: _endDate,
+          audience: audienceMap,
         );
       } else {
         response = await ExamService.updateExam(
@@ -865,6 +898,7 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
             'startDate': _startDate?.toIso8601String(),
             'endDate': _endDate?.toIso8601String(),
             'isScheduled': _isScheduled,
+            'audience': audienceMap,
           },
         );
       }

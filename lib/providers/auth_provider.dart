@@ -1,13 +1,17 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
+import '../services/socket_service.dart';
 
 class AuthProvider with ChangeNotifier {
   UserModel? _user;
+  String? _token;
   bool _isLoading = false;
   String? _error;
 
   UserModel? get user => _user;
+  String? get token => _token;
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get isLoggedIn => _user != null;
@@ -23,6 +27,12 @@ class AuthProvider with ChangeNotifier {
         final currentUser = await AuthService.getCurrentUser();
         if (currentUser != null && (currentUser.role == 'student' || currentUser.role == 'tutor')) {
           _user = currentUser;
+          _token = await AuthService.getToken();
+          if (_token != null) {
+            SocketService().connect(token: _token!, userName: currentUser.name);
+          }
+          // Register device token for push notifications
+          NotificationService().registerDeviceToken(currentUser.id);
         } else {
           await AuthService.logout();
         }
@@ -58,6 +68,10 @@ class AuthProvider with ChangeNotifier {
 
       if (response['success']) {
         _user = UserModel.fromJson(response['user']);
+        _token = response['token'];
+        SocketService().connect(token: _token!, userName: _user!.name);
+        // Register device token for push notifications
+        NotificationService().registerDeviceToken(_user!.id);
         _isLoading = false;
         notifyListeners();
         return true;
@@ -99,6 +113,10 @@ class AuthProvider with ChangeNotifier {
         }
 
         _user = userModel;
+        _token = response['token'];
+        SocketService().connect(token: _token!, userName: userModel.name);
+        // Register device token for push notifications
+        NotificationService().registerDeviceToken(userModel.id);
         _isLoading = false;
         notifyListeners();
         return true;
@@ -236,7 +254,9 @@ class AuthProvider with ChangeNotifier {
   // Logout
   Future<void> logout() async {
     await AuthService.logout();
+    SocketService().disconnect();
     _user = null;
+    _token = null;
     notifyListeners();
   }
 

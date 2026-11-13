@@ -3,18 +3,35 @@ import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
+import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/theme_provider.dart';
 import '../../utils/constants.dart';
 import '../../services/cloudinary_service.dart';
+import '../../services/dashboard_service.dart';
+import '../../services/notification_service.dart';
+import '../../widgets/sapience_ui.dart';
 import '../auth/login_screen.dart';
 import 'edit_profile_screen.dart';
 import 'change_password_screen.dart';
 import 'notification_settings_screen.dart';
 import 'language_settings_screen.dart';
 import '../admin/subscription/subscription_screen.dart';
+import '../common/subscription/personal_subscription_screen.dart';
+import '../common/notifications/notifications_screen.dart';
+import '../common/chat/conversations_screen.dart';
+import '../common/announcements/announcements_screen.dart';
+import '../student/analytics/student_analytics_screen.dart';
+import '../student/certificates/student_certificates_screen.dart';
+import '../student/payments/student_payments_screen.dart';
+import '../student/student_batches_screen.dart';
+import '../student/wishlist/student_wishlist_screen.dart';
+import '../tutor/reports/tutor_reports_screen.dart';
+import '../tutor/earnings/tutor_earnings_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final bool embedded;
+  const ProfileScreen({super.key, this.embedded = false});
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -23,6 +40,43 @@ class ProfileScreen extends StatefulWidget {
 class _ProfileScreenState extends State<ProfileScreen> {
   final ImagePicker _picker = ImagePicker();
   bool _isUploadingImage = false;
+  Map<String, dynamic>? _studentStats;
+  int _tutorCourses = 0;
+  int _tutorStudents = 0;
+  int _tutorExams = 0;
+  int _unreadNotifications = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfileStats();
+  }
+
+  Future<void> _loadProfileStats() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final role = authProvider.user?.role ?? 'student';
+      final unread = await NotificationService.getUnreadCount();
+
+      if (role == 'tutor') {
+        final tStats = await DashboardService.getTutorStats();
+        if (!mounted) return;
+        setState(() {
+          _unreadNotifications = unread;
+          _tutorCourses = tStats?.courses.total ?? 0;
+          _tutorStudents = tStats?.students.total ?? 0;
+          _tutorExams = tStats?.content.quizzes ?? 0;
+        });
+      } else {
+        final sStats = await DashboardService.getStudentStats();
+        if (!mounted) return;
+        setState(() {
+          _unreadNotifications = unread;
+          _studentStats = sStats;
+        });
+      }
+    } catch (_) {}
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,295 +85,533 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final lang = user?.language ?? 'en';
     final localizations = AppLocalizations(lang);
 
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator(color: AppColors.primary)),
+      );
+    }
+
+    final avatarUrl = ApiConfig.resolveMediaUrl(user.profileImage);
+    final isTutor = user.role == 'tutor';
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text(localizations.translate('profile')),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.edit),
-            onPressed: () async {
-              final result = await Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const EditProfileScreen(),
-                ),
-              );
-              if (result == true) {
-                authProvider.refreshUser();
-              }
-            },
-          ),
-        ],
-      ),
-      body: user == null
-          ? const Center(child: CircularProgressIndicator())
-          : RefreshIndicator(
-              onRefresh: () async {
-                await authProvider.refreshUser();
-              },
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    // Profile Picture
-                    Center(
-                      child: Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(60),
-                            child: CachedNetworkImage(
-                              imageUrl: user.profileImage,
-                              width: 120,
-                              height: 120,
-                              fit: BoxFit.cover,
-                              placeholder: (context, url) => Container(
-                                color: Colors.grey[300],
-                                child: const Center(
-                                  child: CircularProgressIndicator(),
-                                ),
-                              ),
-                              errorWidget: (context, url, error) => Container(
-                                color: Colors.grey[300],
-                                child: const Icon(Icons.person, size: 60),
-                              ),
-                            ),
-                          ),
-                          if (_isUploadingImage)
-                            Positioned.fill(
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black54,
-                                  borderRadius: BorderRadius.circular(60),
-                                ),
-                                child: const Center(
-                                  child: CircularProgressIndicator(
-                                    color: Colors.white,
+      body: SapienceBackground(
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              SapienceHeader(
+                title: localizations.translate('profile'),
+                leading: widget.embedded ? const SizedBox(width: 40) : null,
+                actions: [
+                  IconButton(
+                    tooltip: localizations.translate('settings'),
+                    icon: const Icon(Icons.settings_outlined, color: AppColors.navy, size: 25),
+                    onPressed: () => _showSettingsSheet(context, authProvider, localizations, lang),
+                    splashRadius: 20,
+                  ),
+                ],
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  color: AppColors.primary,
+                  onRefresh: () async {
+                    await Future.wait([
+                      authProvider.refreshUser(),
+                      _loadProfileStats(),
+                    ]);
+                  },
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
+                    children: [
+                      // Navy Wave Profile Card matching Arjun Mehta's Learning Profile.png
+                      SapienceNavyWaveBanner(
+                        borderRadius: 22,
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+                        child: Row(
+                          children: [
+                            Stack(
+                              children: [
+                                Container(
+                                  width: 86,
+                                  height: 86,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: Colors.white, width: 2.5),
+                                    color: AppColors.primarySoft,
+                                  ),
+                                  child: ClipOval(
+                                    child: avatarUrl.isNotEmpty
+                                        ? CachedNetworkImage(
+                                            imageUrl: avatarUrl,
+                                            fit: BoxFit.cover,
+                                            errorWidget: (_, __, ___) => const Icon(
+                                              Icons.person_rounded,
+                                              size: 42,
+                                              color: AppColors.primary,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.person_rounded,
+                                            size: 42,
+                                            color: AppColors.primary,
+                                          ),
                                   ),
                                 ),
-                              ),
-                            ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: GestureDetector(
-                              onTap: _isUploadingImage
-                                  ? null
-                                  : () => _showImageSourceDialog(context),
-                              child: Container(
-                                padding: const EdgeInsets.all(8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: Colors.white,
-                                    width: 2,
+                                if (_isUploadingImage)
+                                  Positioned.fill(
+                                    child: Container(
+                                      decoration: const BoxDecoration(
+                                        color: Colors.black54,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Center(
+                                        child: SizedBox(
+                                          width: 24,
+                                          height: 24,
+                                          child: CircularProgressIndicator(
+                                            color: Colors.white,
+                                            strokeWidth: 2.2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: GestureDetector(
+                                    onTap: _isUploadingImage
+                                        ? null
+                                        : () => _showImageSourceDialog(context),
+                                    child: Container(
+                                      width: 28,
+                                      height: 28,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.success,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: Colors.white, width: 2.2),
+                                      ),
+                                      child: const Icon(Icons.edit_rounded,
+                                          color: Colors.white, size: 14),
+                                    ),
                                   ),
                                 ),
-                                child: const Icon(
-                                  Icons.camera_alt,
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    user.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 20,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                      letterSpacing: -0.3,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 3),
+                                  Text(
+                                    user.email,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontSize: 13.5,
+                                      color: Colors.white70,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Row(
+                                    children: [
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withValues(alpha: 0.18),
+                                          borderRadius: BorderRadius.circular(999),
+                                        ),
+                                        child: Text(
+                                          _getRoleText(user.role, lang),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      GestureDetector(
+                                        onTap: () async {
+                                          final res = await Navigator.push(
+                                            context,
+                                            MaterialPageRoute(
+                                                builder: (_) => const EditProfileScreen()),
+                                          );
+                                          if (res == true) authProvider.refreshUser();
+                                        },
+                                        child: const Text(
+                                          'Edit Profile',
+                                          style: TextStyle(
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w700,
+                                            color: Color(0xFF6BE07F),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      // 4-Column Stats Bar (100% live backend metrics!)
+                      SapienceStatsRow(
+                        items: isTutor
+                            ? [
+                                SapienceStatItem(
+                                  icon: const Icon(Icons.menu_book_rounded, color: AppColors.primary, size: 22),
+                                  value: '$_tutorCourses',
+                                  label: 'Courses',
+                                ),
+                                SapienceStatItem(
+                                  icon: const Icon(Icons.groups_rounded, color: AppColors.success, size: 22),
+                                  value: '$_tutorStudents',
+                                  label: 'Students',
+                                ),
+                                SapienceStatItem(
+                                  icon: const Icon(Icons.quiz_rounded, color: AppColors.purple, size: 22),
+                                  value: '$_tutorExams',
+                                  label: 'Exams',
+                                ),
+                                SapienceStatItem(
+                                  icon: const Icon(Icons.notifications_active_rounded, color: AppColors.warning, size: 22),
+                                  value: '$_unreadNotifications',
+                                  label: 'Alerts',
+                                ),
+                              ]
+                            : [
+                                SapienceStatItem(
+                                  icon: const Icon(Icons.school_rounded, color: AppColors.primary, size: 22),
+                                  value: '${_studentStats?['enrolledCourses'] ?? 0}',
+                                  label: 'Courses',
+                                ),
+                                SapienceStatItem(
+                                  icon: const Icon(Icons.assignment_turned_in_rounded, color: AppColors.success, size: 22),
+                                  value: '${_studentStats?['completedCourses'] ?? 0}',
+                                  label: 'Completed',
+                                ),
+                                SapienceStatItem(
+                                  icon: const Icon(Icons.play_circle_filled_rounded, color: AppColors.primary, size: 22),
+                                  value: '${_studentStats?['inProgress'] ?? 0}',
+                                  label: 'In Progress',
+                                ),
+                                SapienceStatItem(
+                                  icon: const Icon(Icons.emoji_events_rounded, color: AppColors.warning, size: 22),
+                                  value: '${_studentStats?['averageExamScore'] ?? 0}%',
+                                  label: 'Avg Score',
+                                ),
+                              ],
+                      ),
+                      const SizedBox(height: 16),
+                      // Clean White Pill Menu Rows (exact match to Profile PNG!)
+                      if (!isTutor) ...[
+                        _buildPillRow(
+                          icon: Icons.bar_chart_rounded,
+                          iconColor: AppColors.primary,
+                          title: 'My Learning Progress',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const StudentAnalyticsScreen()),
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Name
-                    Text(
-                      user.name,
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-
-                    // Role Badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        _getRoleText(user.role, lang),
-                        style: TextStyle(
-                          color: AppColors.primary,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-
-                    // User Info Card
-                    _buildInfoSection(
-                      context,
-                      localizations: localizations,
-                      title: localizations.translate('personalInformation'),
-                      children: [
-                        _buildInfoTile(
-                          icon: Icons.email,
-                          title: localizations.translate('email'),
-                          value: user.email,
+                        _buildPillRow(
+                          icon: Icons.bookmark_border_rounded,
+                          iconColor: AppColors.purple,
+                          title: 'Saved Courses (Wishlist)',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const StudentWishlistScreen()),
+                          ),
                         ),
-                        _buildInfoTile(
-                          icon: Icons.phone,
-                          title: localizations.translate('phone'),
-                          value: user.phone,
+                        _buildPillRow(
+                          icon: Icons.workspace_premium_outlined,
+                          iconColor: AppColors.success,
+                          title: 'My Certificates',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const StudentCertificatesScreen()),
+                          ),
                         ),
-                        _buildInfoTile(
-                          icon: Icons.person_outline,
-                          title: localizations.translate('role'),
-                          value: _getRoleText(user.role, lang),
+                        _buildPillRow(
+                          icon: Icons.groups_outlined,
+                          iconColor: AppColors.primary,
+                          title: 'Batches & Schedule',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const StudentBatchesScreen()),
+                          ),
+                        ),
+                        _buildPillRow(
+                          icon: Icons.credit_card_rounded,
+                          iconColor: AppColors.warning,
+                          title: 'Payments & Plan',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const StudentPaymentsScreen()),
+                          ),
+                        ),
+                      ] else ...[
+                        _buildPillRow(
+                          icon: Icons.bar_chart_rounded,
+                          iconColor: AppColors.primary,
+                          title: 'Performance Reports',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TutorReportsScreen()),
+                          ),
+                        ),
+                        _buildPillRow(
+                          icon: Icons.account_balance_wallet_outlined,
+                          iconColor: AppColors.success,
+                          title: 'Earnings & Payouts',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const TutorEarningsScreen()),
+                          ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Settings Section
-                    _buildInfoSection(
-                      context,
-                      localizations: localizations,
-                      title: localizations.translate('settings'),
-                      children: [
-                        if (user.role == 'admin' || user.role == 'superadmin')
-                          _buildActionTile(
-                            icon: Icons.workspace_premium,
-                            title: 'Subscription & Billing',
-                            onTap: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const SubscriptionScreen(),
-                                ),
-                              );
-                            },
-                          ),
-                        _buildActionTile(
-                          icon: Icons.notifications_outlined,
-                          title: localizations.translate('notifications'),
-                          onTap: () async {
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    const NotificationSettingsScreen(),
-                              ),
-                            );
-                            if (result == true) {
-                              authProvider.refreshUser();
-                            }
-                          },
+                      _buildPillRow(
+                        icon: Icons.notifications_none_rounded,
+                        iconColor: AppColors.purple,
+                        title: 'Notifications',
+                        showDot: _unreadNotifications > 0,
+                        onTap: () async {
+                          await Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const NotificationsScreen()),
+                          );
+                          _loadProfileStats();
+                        },
+                      ),
+                      _buildPillRow(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        iconColor: AppColors.cyan,
+                        title: 'Messages & Announcements',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ConversationsScreen()),
                         ),
-                        _buildActionTile(
-                          icon: Icons.lock_outline,
-                          title: localizations.translate('changePassword'),
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const ChangePasswordScreen(),
-                              ),
-                            );
-                          },
-                        ),
-                        _buildActionTile(
-                          icon: Icons.language,
-                          title: localizations.translate('language'),
-                          trailing: Text(
-                            lang == 'en' ? 'English' : 'हिंदी',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
+                      ),
+                      _buildPillRow(
+                        icon: Icons.campaign_outlined,
+                        iconColor: AppColors.primary,
+                        title: 'Campus Announcements',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => AnnouncementsScreen(
+                              isTutor: authProvider.user?.role == 'tutor',
                             ),
                           ),
-                          onTap: () async {
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const LanguageSettingsScreen(),
-                              ),
-                            );
-                            if (result == true) {
-                              authProvider.refreshUser();
-                              setState(() {}); // Rebuild to update language
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Support Section
-                    _buildInfoSection(
-                      context,
-                      localizations: localizations,
-                      title: localizations.translate('support'),
-                      children: [
-                        _buildActionTile(
-                          icon: Icons.help_outline,
-                          title: localizations.translate('helpAndSupport'),
-                          onTap: () {
-                            _showHelpDialog(context, localizations);
-                          },
-                        ),
-                        _buildActionTile(
-                          icon: Icons.info_outline,
-                          title: localizations.translate('about'),
-                          onTap: () {
-                            _showAboutDialog(context, localizations);
-                          },
-                        ),
-                        _buildActionTile(
-                          icon: Icons.privacy_tip_outlined,
-                          title: localizations.translate('privacyPolicy'),
-                          onTap: () {
-                            _showPrivacyPolicyDialog(context, localizations);
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-
-                    // Logout Button
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: () => _logout(context, localizations),
-                        icon: const Icon(Icons.logout),
-                        label: Text(localizations.translate('logout')),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.red,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Version Info
-                    Text(
-                      '${localizations.translate('version')} 1.0.0',
-                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+                      _buildPillRow(
+                        icon: Icons.help_outline_rounded,
+                        iconColor: AppColors.primary,
+                        title: localizations.translate('helpAndSupport'),
+                        onTap: () => _showHelpDialog(context, localizations),
+                      ),
+                      _buildPillRow(
+                        icon: Icons.logout_rounded,
+                        iconColor: AppColors.error,
+                        title: 'Log Out',
+                        onTap: () => _logout(context, localizations),
+                      ),
+                    ],
+                  ),
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPillRow({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    bool showDot = false,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: SapienceCard(
+        borderRadius: 16,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        onTap: onTap,
+        child: Row(
+          children: [
+            Icon(icon, color: iconColor, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.navy,
+                      ),
+                    ),
+                  ),
+                  if (showDot) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: const BoxDecoration(
+                        color: AppColors.error,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             ),
+            const Icon(Icons.chevron_right_rounded, color: AppColors.navy, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSettingsSheet(
+    BuildContext context,
+    AuthProvider authProvider,
+    AppLocalizations localizations,
+    String lang,
+  ) {
+    final user = authProvider.user;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.cardBorder,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Text(
+                localizations.translate('settings'),
+                style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w800, color: AppColors.navy),
+              ),
+              const SizedBox(height: 8),
+              if (user?.role == 'admin' || user?.role == 'superadmin')
+                ListTile(
+                  leading: const Icon(Icons.workspace_premium, color: AppColors.primary),
+                  title: const Text('Subscription & Billing'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
+                  },
+                )
+              else
+                ListTile(
+                  leading: const Icon(Icons.stars_rounded, color: AppColors.primary),
+                  title: const Text('Personal Subscription'),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonalSubscriptionScreen()));
+                  },
+                ),
+              ListTile(
+                leading: const Icon(Icons.notifications_outlined, color: AppColors.purple),
+                title: Text(localizations.translate('notifications')),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final r = await Navigator.push(context, MaterialPageRoute(builder: (_) => const NotificationSettingsScreen()));
+                  if (r == true) authProvider.refreshUser();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.lock_outline, color: AppColors.navy),
+                title: Text(localizations.translate('changePassword')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordScreen()));
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.language, color: AppColors.success),
+                title: Text(localizations.translate('language')),
+                trailing: Text(lang == 'en' ? 'English' : 'हिंदी', style: const TextStyle(color: AppColors.textMuted)),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  final r = await Navigator.push(context, MaterialPageRoute(builder: (_) => const LanguageSettingsScreen()));
+                  if (r == true) {
+                    authProvider.refreshUser();
+                    if (mounted) setState(() {});
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.brightness_6_outlined, color: AppColors.warning),
+                title: const Text('App Theme'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showThemeDialog(context);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.privacy_tip_outlined, color: AppColors.textMuted),
+                title: Text(localizations.translate('privacyPolicy')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showPrivacyPolicyDialog(context, localizations);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.info_outline, color: AppColors.textMuted),
+                title: Text(localizations.translate('about')),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showAboutDialog(context, localizations);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -335,123 +627,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       default:
         return role;
     }
-  }
-
-  Widget _buildInfoSection(
-    BuildContext context, {
-    required AppLocalizations localizations,
-    required String title,
-    required List<Widget> children,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              title,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-          ),
-          const Divider(height: 1),
-          ...children,
-        ],
-      ),
-    );
-  }
-
-  Widget _buildInfoTile({
-    required IconData icon,
-    required String title,
-    required String value,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: AppColors.primary.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: AppColors.primary, size: 20),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActionTile({
-    required IconData icon,
-    required String title,
-    required VoidCallback onTap,
-    Widget? trailing,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.primary.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(icon, color: AppColors.primary, size: 20),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            if (trailing != null)
-              trailing
-            else
-              Icon(Icons.chevron_right, color: Colors.grey[400]),
-          ],
-        ),
-      ),
-    );
   }
 
   void _showImageSourceDialog(BuildContext context) {
@@ -775,5 +950,55 @@ class _ProfileScreenState extends State<ProfileScreen> {
         );
       }
     }
+  }
+
+  void _showThemeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final themeProvider = Provider.of<ThemeProvider>(context, listen: false);
+        return AlertDialog(
+          title: const Text('Choose App Theme'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              RadioListTile<ThemeMode>(
+                title: const Text('Light Theme'),
+                value: ThemeMode.light,
+                groupValue: themeProvider.themeMode,
+                onChanged: (mode) {
+                  if (mode != null) {
+                    themeProvider.setThemeMode(mode);
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              RadioListTile<ThemeMode>(
+                title: const Text('Dark Theme'),
+                value: ThemeMode.dark,
+                groupValue: themeProvider.themeMode,
+                onChanged: (mode) {
+                  if (mode != null) {
+                    themeProvider.setThemeMode(mode);
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+              RadioListTile<ThemeMode>(
+                title: const Text('System Default'),
+                value: ThemeMode.system,
+                groupValue: themeProvider.themeMode,
+                onChanged: (mode) {
+                  if (mode != null) {
+                    themeProvider.setThemeMode(mode);
+                    Navigator.pop(context);
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
+    );
   }
 }

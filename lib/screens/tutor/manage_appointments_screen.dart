@@ -159,14 +159,9 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen>
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
-          ],
+          borderRadius: AppThemeDesign.borderRadiusMedium,
+          boxShadow: const [AppThemeDesign.cardShadow],
+          border: Border.all(color: Colors.grey.shade100, width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -300,6 +295,7 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
         title: const Text('Confirm Appointment'),
         content: Text(
           'Confirm appointment with ${appointment.student.name}?',
@@ -348,6 +344,7 @@ class _ManageAppointmentsScreenState extends State<ManageAppointmentsScreen>
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
         title: const Text('Decline Appointment'),
         content: const Text(
           'Are you sure you want to decline this appointment?',
