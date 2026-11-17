@@ -386,39 +386,41 @@ class SapienceTintedTile extends StatelessWidget {
       child: child,
     );
 
-    final widget = Stack(
-      clipBehavior: Clip.none,
-      children: [
-        Positioned.fill(child: container),
-        if (badgeText != null)
-          Positioned(
-            top: -7,
-            right: 4,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: AppColors.error,
-                borderRadius: BorderRadius.circular(999),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.error.withValues(alpha: 0.35),
-                    blurRadius: 6,
-                    offset: const Offset(0, 2),
+    final Widget widget = badgeText == null
+        ? container
+        : Stack(
+            clipBehavior: Clip.none,
+            children: [
+              container,
+              Positioned(
+                top: -7,
+                right: 4,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppColors.error,
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.error.withValues(alpha: 0.35),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              child: Text(
-                badgeText!,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
+                  child: Text(
+                    badgeText!,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
                 ),
               ),
-            ),
-          ),
-      ],
-    );
+            ],
+          );
 
     if (onTap == null) return widget;
     return InteractivePressScale(onTap: onTap!, child: widget);
