@@ -31,6 +31,7 @@ import 'questions/comprehension_management_screen.dart';
 import 'questions/question_bank_screen.dart';
 import 'quizzes/tutor_reevaluation_requests_screen.dart';
 import 'reports/tutor_reports_screen.dart';
+import 'earnings/tutor_earnings_screen.dart';
 import 'tutor_more_hub_screen.dart';
 import 'tutor_students_screen.dart';
 
@@ -151,11 +152,22 @@ class TutorHomeContent extends StatelessWidget {
     final authProvider = Provider.of<AuthProvider>(context);
     final dashboardProvider = Provider.of<DashboardProvider>(context);
     final courseProvider = Provider.of<CourseProvider>(context);
+    final workspaceProvider = Provider.of<WorkspaceProvider>(context);
+    final dashboardState =
+        context.findAncestorStateOfType<_TutorDashboardScreenState>();
 
     final stats = dashboardProvider.stats;
     final unreadCount = dashboardProvider.unreadNotifications;
     final avatarUrl =
         ApiConfig.resolveMediaUrl(authProvider.user?.profileImage);
+
+    final isPrivate = workspaceProvider.isPrivateWorkspace;
+    final instName = workspaceProvider.currentInstituteName;
+    final workspaceBadgeLabel = isPrivate
+        ? 'PRIVATE STUDIO'
+        : (instName != null && instName.isNotEmpty
+            ? instName.toUpperCase()
+            : 'EDUCATOR WORKSPACE');
 
     return SapienceBackground(
       child: SafeArea(
@@ -198,14 +210,53 @@ class TutorHomeContent extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'EDUCATOR WORKSPACE',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w800,
-                              color: AppColors.primary,
-                              letterSpacing: 0.7,
-                            ),
+                          Row(
+                            children: [
+                              if (isPrivate) ...[
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 6, vertical: 2),
+                                  margin: const EdgeInsets.only(right: 6),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFF1ED066)
+                                        .withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: const Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.workspace_premium_rounded,
+                                          size: 10, color: Color(0xFF109B4B)),
+                                      SizedBox(width: 3),
+                                      Text(
+                                        'STUDIO',
+                                        style: TextStyle(
+                                          fontSize: 8.5,
+                                          fontWeight: FontWeight.w800,
+                                          color: Color(0xFF109B4B),
+                                          letterSpacing: 0.5,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              Expanded(
+                                child: Text(
+                                  workspaceBadgeLabel,
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w800,
+                                    color: isPrivate
+                                        ? const Color(0xFF109B4B)
+                                        : AppColors.primary,
+                                    letterSpacing: 0.7,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
                           ),
                           Text(
                             authProvider.user?.name ?? 'Instructor',
@@ -305,50 +356,119 @@ class TutorHomeContent extends StatelessWidget {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 10,
-                                              vertical: 4,
-                                            ),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFF1ED066)
-                                                  .withValues(alpha: 0.24),
+                                          Material(
+                                            color: Colors.transparent,
+                                            child: InkWell(
+                                              onTap: () =>
+                                                  dashboardState?._onItemTapped(3),
                                               borderRadius:
                                                   BorderRadius.circular(20),
-                                            ),
-                                            child: Text(
-                                              stats != null
-                                                  ? '${stats.content.quizzes} Quizzes • ${stats.content.questions} Qs'
-                                                  : 'Live Teaching Console',
-                                              style: const TextStyle(
-                                                color: Colors.white,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 10,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: const Color(0xFF1ED066)
+                                                      .withValues(alpha: 0.24),
+                                                  borderRadius:
+                                                      BorderRadius.circular(20),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize: MainAxisSize.min,
+                                                  children: [
+                                                    Flexible(
+                                                      child: Text(
+                                                        stats != null
+                                                            ? '${stats.content.quizzes} Quizzes • ${stats.content.questions} Qs'
+                                                            : 'Live Teaching Console',
+                                                        style: const TextStyle(
+                                                          color: Colors.white,
+                                                          fontSize: 11,
+                                                          fontWeight: FontWeight.w700,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow.ellipsis,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 4),
+                                                    const Icon(
+                                                      Icons.arrow_forward_ios_rounded,
+                                                      size: 9,
+                                                      color: Colors.white70,
+                                                    ),
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
                                           const SizedBox(height: 10),
-                                          const Text(
-                                            'Total Course Revenue',
-                                            style: TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 12.5,
-                                              fontWeight: FontWeight.w600,
-                                            ),
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            stats != null
-                                                ? '₹${stats.revenue.total.toStringAsFixed(0)}'
-                                                : '₹0',
-                                            style: const TextStyle(
-                                              color: Colors.white,
-                                              fontSize: 28,
-                                              fontWeight: FontWeight.w800,
+                                          Material(
+                                            color: Colors.transparent,
+                                            child: InkWell(
+                                              onTap: () {
+                                                Navigator.of(context).push(
+                                                  MaterialPageRoute(
+                                                    builder: (_) =>
+                                                        const TutorEarningsScreen(),
+                                                  ),
+                                                );
+                                              },
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              child: Padding(
+                                                padding: const EdgeInsets.symmetric(
+                                                    vertical: 2),
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: const [
+                                                        Flexible(
+                                                          child: Text(
+                                                            'Total Course Revenue',
+                                                            style: TextStyle(
+                                                              color: Colors.white70,
+                                                              fontSize: 12.5,
+                                                              fontWeight:
+                                                                  FontWeight.w600,
+                                                            ),
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                          ),
+                                                        ),
+                                                        SizedBox(width: 4),
+                                                        Icon(
+                                                          Icons.chevron_right_rounded,
+                                                          size: 16,
+                                                          color: Colors.white70,
+                                                        ),
+                                                      ],
+                                                    ),
+                                                    const SizedBox(height: 2),
+                                                    Text(
+                                                      stats != null
+                                                          ? '₹${stats.revenue.total.toStringAsFixed(0)}'
+                                                          : '₹0',
+                                                      style: const TextStyle(
+                                                        color: Colors.white,
+                                                        fontSize: 28,
+                                                        fontWeight: FontWeight.w800,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
                                             ),
                                           ),
                                           const SizedBox(height: 12),
-                                          Row(
+                                          Wrap(
+                                            spacing: 8,
+                                            runSpacing: 8,
                                             children: [
                                               SapienceButton(
                                                 label: 'New Course',
@@ -366,6 +486,27 @@ class TutorHomeContent extends StatelessWidget {
                                                     MaterialPageRoute(
                                                       builder: (_) =>
                                                           const CreateCourseScreen(),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              SapienceButton(
+                                                label: 'Earnings',
+                                                leadingIcon:
+                                                    Icons.account_balance_wallet_rounded,
+                                                variant:
+                                                    SapienceButtonVariant.greenToBlue,
+                                                height: 36,
+                                                fontSize: 12,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 14,
+                                                ),
+                                                onTap: () {
+                                                  Navigator.of(context).push(
+                                                    MaterialPageRoute(
+                                                      builder: (_) =>
+                                                          const TutorEarningsScreen(),
                                                     ),
                                                   );
                                                 },
@@ -402,6 +543,8 @@ class TutorHomeContent extends StatelessWidget {
                                       value: '${stats.courses.total}',
                                       label:
                                           '${stats.courses.published} Live',
+                                      onTap: () =>
+                                          dashboardState?._onItemTapped(1),
                                     ),
                                     SapienceStatItem(
                                       icon: const Icon(Icons.groups_rounded,
@@ -409,6 +552,14 @@ class TutorHomeContent extends StatelessWidget {
                                       value: '${stats.students.total}',
                                       label:
                                           '+${stats.students.recentEnrollments} wk',
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const TutorStudentsScreen(),
+                                          ),
+                                        );
+                                      },
                                     ),
                                     SapienceStatItem(
                                       icon: const Icon(
@@ -417,6 +568,14 @@ class TutorHomeContent extends StatelessWidget {
                                           color: Color(0xFF7B3DF5)),
                                       value: '${stats.appointments.upcoming}',
                                       label: 'Sessions',
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const ManageAppointmentsScreen(),
+                                          ),
+                                        );
+                                      },
                                     ),
                                     SapienceStatItem(
                                       icon: const Icon(Icons.star_rounded,
@@ -425,6 +584,14 @@ class TutorHomeContent extends StatelessWidget {
                                           stats.rating.average.toStringAsFixed(1),
                                       label:
                                           '${stats.rating.totalReviews} rev',
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                const TutorReportsScreen(),
+                                          ),
+                                        );
+                                      },
                                     ),
                                   ],
                                 ),
@@ -979,18 +1146,39 @@ class TutorHomeContent extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppColors.primaryTint,
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                        builder: (_) => const TutorEarningsScreen()),
+                  );
+                },
                 borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                hasValidTrendData ? '6-Month Sync' : 'Overview',
-                style: const TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.primary,
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryTint,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        hasValidTrendData ? '6-Month Sync' : 'Overview',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                      const Icon(Icons.arrow_forward_ios_rounded,
+                          size: 9, color: AppColors.primary),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -998,6 +1186,11 @@ class TutorHomeContent extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         SapienceCard(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const TutorEarningsScreen()),
+            );
+          },
           padding: const EdgeInsets.all(16),
           child: SizedBox(
             height: 185,
@@ -1069,6 +1262,12 @@ class TutorHomeContent extends StatelessWidget {
                         (progressMap['percentage'] as num?)?.toInt() ?? 0;
 
                     return ListTile(
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                              builder: (_) => const TutorStudentsScreen()),
+                        );
+                      },
                       contentPadding: const EdgeInsets.symmetric(
                         horizontal: 14,
                         vertical: 4,

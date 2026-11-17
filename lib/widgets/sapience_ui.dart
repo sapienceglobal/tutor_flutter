@@ -951,11 +951,13 @@ class SapienceStatItem {
   final Widget icon;
   final String value;
   final String label;
+  final VoidCallback? onTap;
 
   const SapienceStatItem({
     required this.icon,
     required this.value,
     required this.label,
+    this.onTap,
   });
 }
 
@@ -974,10 +976,54 @@ class SapienceStatsRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return SapienceCard(
       borderRadius: borderRadius,
-      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       child: Row(
         children: List.generate(items.length, (i) {
           final item = items[i];
+          final col = Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                item.icon,
+                const SizedBox(height: 6),
+                Text(
+                  item.value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  item.label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textBody,
+                  ),
+                ),
+              ],
+            ),
+          );
+
+          Widget cell = item.onTap != null
+              ? Material(
+                  color: Colors.transparent,
+                  child: InkWell(
+                    onTap: item.onTap,
+                    borderRadius: BorderRadius.circular(10),
+                    child: col,
+                  ),
+                )
+              : col;
+
           return Expanded(
             child: Container(
               decoration: i > 0
@@ -987,36 +1033,7 @@ class SapienceStatsRow extends StatelessWidget {
                       ),
                     )
                   : null,
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  item.icon,
-                  const SizedBox(height: 6),
-                  Text(
-                    item.value,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15.5,
-                      fontWeight: FontWeight.w800,
-                      color: AppColors.navy,
-                      letterSpacing: -0.2,
-                    ),
-                  ),
-                  const SizedBox(height: 1),
-                  Text(
-                    item.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w500,
-                      color: AppColors.textBody,
-                    ),
-                  ),
-                ],
-              ),
+              child: cell,
             ),
           );
         }),

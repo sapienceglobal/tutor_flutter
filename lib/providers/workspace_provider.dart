@@ -217,7 +217,9 @@ class WorkspaceProvider with ChangeNotifier {
       instituteId: _workspaceType == 'institute' ? _activeInstituteId : null,
       tutorId: (_role == 'student' && _workspaceType == 'private_tutor')
           ? _activeTutorFilterId
-          : null,
+          : (_role == 'tutor' && _workspaceType == 'private_tutor')
+              ? (_privateTuition?['tutorId']?.toString() ?? _userId)
+              : null,
     );
   }
 
