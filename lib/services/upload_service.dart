@@ -9,11 +9,7 @@ class UploadService {
   static const String _endpoint = '/upload';
 
   static Map<String, String> _multipartHeaders(String? token) {
-    return {
-      if (token != null) 'Authorization': 'Bearer $token',
-      'x-api-key': ApiService.apiKey,
-      'x-client-platform': 'mobile',
-    };
+    return ApiService.buildHeaders(token: token, includeJsonContentType: false);
   }
 
   // Upload single file (document/file)

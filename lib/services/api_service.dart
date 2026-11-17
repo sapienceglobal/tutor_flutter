@@ -5,20 +5,68 @@ import '../config/api_config.dart';
 class ApiService {
   static const String apiKey = "bumpicare_flutter_2025_secure_key_xyz123abc456";
 
-  // Helper method to get headers
-  static Map<String, String> _getHeaders({String? token}) {
-    final headers = {
-      'Content-Type': 'application/json',
+  static String? _workspaceType;
+  static String? _workspaceInstituteId;
+  static String? _workspaceTutorId;
+
+  static void setWorkspaceHeaders({
+    required String type,
+    String? instituteId,
+    String? tutorId,
+  }) {
+    _workspaceType = type;
+    _workspaceInstituteId = (type == 'institute' && instituteId != null && instituteId.isNotEmpty)
+        ? instituteId
+        : null;
+    _workspaceTutorId = (type == 'private_tutor' && tutorId != null && tutorId.isNotEmpty)
+        ? tutorId
+        : null;
+  }
+
+  static void clearWorkspaceHeaders() {
+    _workspaceType = null;
+    _workspaceInstituteId = null;
+    _workspaceTutorId = null;
+  }
+
+  static Map<String, String> get workspaceHeaders {
+    final map = <String, String>{};
+    if (_workspaceType != null && _workspaceType!.isNotEmpty) {
+      map['X-Workspace-Type'] = _workspaceType!;
+    }
+    if (_workspaceInstituteId != null && _workspaceInstituteId!.isNotEmpty) {
+      map['X-Institute-Id'] = _workspaceInstituteId!;
+    }
+    if (_workspaceTutorId != null && _workspaceTutorId!.isNotEmpty) {
+      map['X-Tutor-Id'] = _workspaceTutorId!;
+    }
+    return map;
+  }
+
+  static Map<String, String> buildHeaders({
+    String? token,
+    bool includeJsonContentType = true,
+  }) {
+    final headers = <String, String>{
       'x-api-key': apiKey,
       'x-client-platform': 'mobile',
+      ...workspaceHeaders,
     };
 
-    if (token != null) {
+    if (includeJsonContentType) {
+      headers['Content-Type'] = 'application/json';
+    }
+
+    if (token != null && token.isNotEmpty) {
       headers['Authorization'] = 'Bearer $token';
     }
 
     return headers;
   }
+
+  // Helper method to get headers
+  static Map<String, String> _getHeaders({String? token}) =>
+      buildHeaders(token: token);
 
   // Common wrapper to handle logs and exceptions
   static Future<Map<String, dynamic>> _call(Future<http.Response> Function() call) async {
@@ -110,6 +158,8 @@ class ApiService {
         message: data['message'] ?? 'Something went wrong',
         featureLocked: data['featureLocked'] == true,
         creditExhausted: data['creditExhausted'] == true,
+        code: data['code']?.toString(),
+        statusCode: response.statusCode,
         data: data,
       );
     }
@@ -120,12 +170,16 @@ class ApiException implements Exception {
   final String message;
   final bool featureLocked;
   final bool creditExhausted;
+  final String? code;
+  final int? statusCode;
   final dynamic data;
 
   ApiException({
     required this.message,
     this.featureLocked = false,
     this.creditExhausted = false,
+    this.code,
+    this.statusCode,
     this.data,
   });
 

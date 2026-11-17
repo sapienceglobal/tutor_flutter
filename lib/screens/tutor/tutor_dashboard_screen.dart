@@ -5,11 +5,14 @@ import '../../models/course_model.dart';
 import '../../models/dashboard_stats_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/course_provider.dart';
+import '../../providers/subscription_provider.dart';
 import '../../providers/tutor_dashboard_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../utils/constants.dart';
 import '../../widgets/create_exam_screen.dart';
 import '../../widgets/performance_chart.dart';
 import '../../widgets/sapience_ui.dart';
+import '../../widgets/workspace_switcher.dart';
 import '../common/chat/conversations_screen.dart';
 import '../common/notifications/notifications_screen.dart';
 import 'ai_buddy/tutor_ai_hub_screen.dart';
@@ -40,11 +43,33 @@ class TutorDashboardScreen extends StatefulWidget {
 
 class _TutorDashboardScreenState extends State<TutorDashboardScreen> {
   int _selectedIndex = 0;
+  String? _lastWorkspaceSignature;
 
   @override
   void initState() {
     super.initState();
     _loadData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ws = Provider.of<WorkspaceProvider>(context);
+    final signature = '${ws.workspaceType}|${ws.activeInstituteId ?? ''}';
+    if (_lastWorkspaceSignature == null) {
+      _lastWorkspaceSignature = signature;
+      return;
+    }
+    if (_lastWorkspaceSignature != signature) {
+      _lastWorkspaceSignature = signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final auth = Provider.of<AuthProvider>(context, listen: false);
+        Provider.of<SubscriptionProvider>(context, listen: false)
+            .syncWithWorkspace(userMap: auth.rawUser, workspace: ws);
+        _loadData();
+      });
+    }
   }
 
   Future<void> _loadData() async {
@@ -129,10 +154,8 @@ class TutorHomeContent extends StatelessWidget {
         ApiConfig.resolveMediaUrl(authProvider.user?.profileImage);
 
     return SapienceBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
-          bottom: false,
+      child: SafeArea(
+        bottom: false,
           child: Column(
             children: [
               // Top App Header matching Student Dashboard
@@ -257,6 +280,16 @@ class TutorHomeContent extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              WorkspaceSwitcherBar(
+                                onWorkspaceChanged: () async {
+                                  await Future.wait([
+                                    dashboardProvider.fetchStats(),
+                                    courseProvider.fetchMyCourses(),
+                                  ]);
+                                },
+                              ),
+                              const SizedBox(height: 12),
+
                               // Navy Wave Revenue & Courses Hero Card
                               SapienceNavyWaveBanner(
                                 borderRadius: 24,
@@ -275,7 +308,7 @@ class TutorHomeContent extends StatelessWidget {
                                             ),
                                             decoration: BoxDecoration(
                                               color: const Color(0xFF1ED066)
-                                                  .withOpacity(0.24),
+                                                  .withValues(alpha: 0.24),
                                               borderRadius:
                                                   BorderRadius.circular(20),
                                             ),
@@ -344,6 +377,12 @@ class TutorHomeContent extends StatelessWidget {
                                       width: 96,
                                       height: 108,
                                       fit: BoxFit.contain,
+                                      errorBuilder:
+                                          (context, error, stackTrace) =>
+                                              const SizedBox(
+                                        width: 96,
+                                        height: 108,
+                                      ),
                                     ),
                                   ],
                                 ),
@@ -467,8 +506,7 @@ class TutorHomeContent extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildQuickActionsGrid(BuildContext context) {
@@ -571,11 +609,12 @@ class TutorHomeContent extends StatelessWidget {
         GridView.builder(
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
+          clipBehavior: Clip.none,
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: 4,
             crossAxisSpacing: 10,
             mainAxisSpacing: 10,
-            childAspectRatio: 0.92,
+            childAspectRatio: 0.82,
           ),
           itemCount: tiles.length,
           itemBuilder: (context, index) {
@@ -907,14 +946,15 @@ class TutorHomeContent extends StatelessWidget {
         );
       }).toList();
     } else {
-      data = [
-        ChartDataPoint(label: 'Jan', value: 0, secondaryValue: 0),
-        ChartDataPoint(label: 'Feb', value: 0, secondaryValue: 0),
-        ChartDataPoint(label: 'Mar', value: 0, secondaryValue: 0),
-        ChartDataPoint(label: 'Apr', value: 0, secondaryValue: 0),
-        ChartDataPoint(label: 'May', value: 0, secondaryValue: 0),
-      ];
+      data = [];
     }
+
+    final bool hasValidTrendData = data.isNotEmpty &&
+        data.any((d) =>
+            (!d.value.isNaN && d.value > 0) ||
+            (d.secondaryValue != null &&
+                !d.secondaryValue!.isNaN &&
+                d.secondaryValue! > 0));
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -936,9 +976,9 @@ class TutorHomeContent extends StatelessWidget {
                 color: AppColors.primaryTint,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Text(
-                '6-Month Sync',
-                style: TextStyle(
+              child: Text(
+                hasValidTrendData ? '6-Month Sync' : 'Overview',
+                style: const TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   color: AppColors.primary,
@@ -1066,7 +1106,7 @@ class TutorHomeContent extends StatelessWidget {
                         ),
                         decoration: BoxDecoration(
                           color: pct >= 50
-                              ? AppColors.secondary.withOpacity(0.14)
+                              ? AppColors.secondary.withValues(alpha: 0.14)
                               : AppColors.primaryTint,
                           borderRadius: BorderRadius.circular(10),
                         ),
@@ -1179,7 +1219,7 @@ class TutorHomeContent extends StatelessWidget {
                   ),
                   decoration: BoxDecoration(
                     color: course.status == 'published'
-                        ? AppColors.secondary.withOpacity(0.14)
+                        ? AppColors.secondary.withValues(alpha: 0.14)
                         : AppColors.warningSoft,
                     borderRadius: BorderRadius.circular(6),
                   ),
@@ -1255,10 +1295,8 @@ class TutorTestsTab extends StatelessWidget {
     final courses = courseProvider.myCourses;
 
     return SapienceBackground(
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        body: SafeArea(
-          bottom: false,
+      child: SafeArea(
+        bottom: false,
           child: Column(
             children: [
               SapienceHeader(
@@ -1458,8 +1496,7 @@ class TutorTestsTab extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _testToolTile(

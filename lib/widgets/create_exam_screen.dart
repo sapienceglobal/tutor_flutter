@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/course_model.dart';
 import '../models/exam_model.dart';
+import '../providers/workspace_provider.dart';
 import '../services/exam_service.dart';
 import '../services/ai_service.dart';
 import '../utils/constants.dart';
@@ -56,6 +58,8 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
   @override
   void initState() {
     super.initState();
+    final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
+    _audienceScope = workspace.isPrivateWorkspace ? 'tutor_network' : 'institute';
     if (widget.existingExam != null) {
       _loadExistingExam();
     }
@@ -86,7 +90,11 @@ class _CreateExamScreenState extends State<CreateExamScreen> {
     _questions = List.from(exam.questions);
 
     final aud = exam.audience ?? {};
-    _audienceScope = aud['scope'] ?? 'institute';
+    final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
+    final rawScope = aud['scope']?.toString();
+    _audienceScope = (rawScope == null || rawScope == 'global')
+        ? (workspace.isPrivateWorkspace ? 'tutor_network' : 'institute')
+        : rawScope;
     _audienceBatchIds = List<String>.from(aud['batchIds'] ?? []);
     _audienceStudentIds = List<String>.from(aud['studentIds'] ?? []);
   }

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/workspace_provider.dart';
 import '../../../services/payout_service.dart';
 import '../../../utils/constants.dart';
 import '../../../widgets/shimmer_loader.dart';
@@ -17,6 +19,8 @@ class _TutorEarningsScreenState extends State<TutorEarningsScreen> {
   String? _errorMessage;
   Map<String, dynamic>? _reportData;
   List<dynamic> _payoutsList = [];
+  Map<String, dynamic>? _payoutAccount;
+  Map<String, dynamic>? _privateTeaching;
 
   // Payout request variables
   final _amountController = TextEditingController();
@@ -39,13 +43,26 @@ class _TutorEarningsScreenState extends State<TutorEarningsScreen> {
       _errorMessage = null;
     });
     try {
-      final data = await PayoutService.getPayoutReport();
+      final results = await Future.wait<dynamic>([
+        PayoutService.getPayoutReport(),
+        PayoutService.getMyPayoutAccount().catchError((_) => <String, dynamic>{}),
+      ]);
+      final data = results[0] as Map<String, dynamic>;
+      final accountRes = results[1] as Map<String, dynamic>;
+      if (!mounted) return;
       setState(() {
         _reportData = data;
         _payoutsList = data['payouts'] ?? [];
+        _payoutAccount = accountRes['payoutAccount'] is Map
+            ? Map<String, dynamic>.from(accountRes['payoutAccount'])
+            : null;
+        _privateTeaching = accountRes['privateTeaching'] is Map
+            ? Map<String, dynamic>.from(accountRes['privateTeaching'])
+            : null;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _errorMessage = e.toString();
         _isLoading = false;
@@ -442,6 +459,9 @@ class _TutorEarningsScreenState extends State<TutorEarningsScreen> {
                   ],
                 ),
               ),
+              const SizedBox(height: 20),
+
+              _buildPayoutKycAndStudioCard(),
               const SizedBox(height: 24),
 
               // ─── MONTHLY REVENUE LINE CHART ───
@@ -735,6 +755,613 @@ class _TutorEarningsScreenState extends State<TutorEarningsScreen> {
           ),
         );
       },
+    );
+  }
+
+  Widget _buildPayoutKycAndStudioCard() {
+    final account = _payoutAccount ?? {};
+    final studio = _privateTeaching ?? {};
+    final status = (account['verificationStatus'] ?? 'not_configured').toString();
+    final method = (account['method'] ?? '').toString();
+    final holder = (account['accountHolderName'] ?? '').toString();
+    final bankName = (account['bankName'] ?? '').toString();
+    final accMasked = (account['accountNumberMasked'] ?? '').toString();
+    final ifsc = (account['ifscCode'] ?? '').toString();
+    final upi = (account['upiId'] ?? '').toString();
+    final rejectionReason = (account['rejectionReason'] ?? '').toString();
+
+    final bool isEnabled = studio['isEnabled'] == true;
+    final bool acceptRequests = studio['acceptSelfJoinRequests'] != false;
+    final String headline = (studio['headline'] ?? '').toString();
+    final String city = (studio['city'] ?? '').toString();
+
+    Color badgeColor;
+    String badgeLabel;
+    switch (status) {
+      case 'verified':
+        badgeColor = AppColors.success;
+        badgeLabel = 'VERIFIED';
+        break;
+      case 'pending':
+        badgeColor = Colors.orange;
+        badgeLabel = 'PENDING REVIEW';
+        break;
+      case 'rejected':
+        badgeColor = AppColors.error;
+        badgeLabel = 'REJECTED';
+        break;
+      default:
+        badgeColor = Colors.blueGrey;
+        badgeLabel = 'NOT CONFIGURED';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: AppThemeDesign.borderRadiusMedium,
+        boxShadow: const [AppThemeDesign.softShadow],
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.verified_user_outlined,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Payout KYC & Private Studio',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Required for Online Razorpay fees in Private Studio',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  badgeLabel,
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade200),
+            ),
+            child: method == 'upi' && upi.isNotEmpty
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'UPI ID: $upi',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13,
+                        ),
+                      ),
+                      if (holder.isNotEmpty) ...[
+                        const SizedBox(height: 3),
+                        Text(
+                          'Account Holder: $holder',
+                          style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                        ),
+                      ],
+                    ],
+                  )
+                : method == 'bank_account' && (bankName.isNotEmpty || accMasked.isNotEmpty)
+                    ? Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${bankName.isNotEmpty ? bankName : 'Bank'} • $accMasked',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            'Holder: $holder${ifsc.isNotEmpty ? '  •  IFSC: $ifsc' : ''}',
+                            style: TextStyle(fontSize: 12, color: Colors.grey.shade700),
+                          ),
+                        ],
+                      )
+                    : Text(
+                        'Add your Bank Account or UPI ID to verify payout KYC. Until verified, paid Private Studio courses only support Offline / Direct fee collection.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                          height: 1.4,
+                        ),
+                      ),
+          ),
+          if (status == 'rejected' && rejectionReason.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.error.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'Rejection note: $rejectionReason',
+                style: const TextStyle(color: AppColors.error, fontSize: 12),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: _showConfigurePayoutAccountSheet,
+                  icon: const Icon(Icons.account_balance_outlined, size: 17),
+                  label: Text(
+                    status == 'not_configured'
+                        ? 'Configure Bank / UPI'
+                        : 'Update Bank / UPI',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primary,
+                    side: const BorderSide(color: AppColors.primary),
+                    padding: const EdgeInsets.symmetric(vertical: 11),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Text(
+                          'Private Tuition Studio',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13.5,
+                            color: Color(0xFF0F172A),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: (isEnabled ? AppColors.success : Colors.grey)
+                                .withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            isEnabled ? 'ACTIVE' : 'OFF',
+                            style: TextStyle(
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              color: isEnabled ? AppColors.success : Colors.grey,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      isEnabled
+                          ? '${acceptRequests ? 'Accepting student join requests' : 'Invite/manual add only'}${headline.isNotEmpty ? ' • $headline' : ''}${city.isNotEmpty ? ' ($city)' : ''}'
+                          : 'Enable Private Tuition Studio to teach students directly outside institutes.',
+                      style: TextStyle(fontSize: 11.5, color: Colors.grey.shade600),
+                    ),
+                  ],
+                ),
+              ),
+              TextButton.icon(
+                onPressed: _showPrivateStudioSettingsDialog,
+                icon: const Icon(Icons.tune_rounded, size: 17),
+                label: const Text('Settings'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showConfigurePayoutAccountSheet() {
+    final account = _payoutAccount ?? {};
+    String selectedMethod = account['method']?.toString() == 'upi'
+        ? 'upi'
+        : 'bank_account';
+    String holderName = (account['accountHolderName'] ?? '').toString();
+    String bankName = (account['bankName'] ?? '').toString();
+    String accountNumber = '';
+    String ifscCode = (account['ifscCode'] ?? '').toString();
+    String upiId = (account['upiId'] ?? '').toString();
+    bool isSaving = false;
+    final formKey = GlobalKey<FormState>();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              left: 20,
+              right: 20,
+              top: 20,
+            ),
+            child: SingleChildScrollView(
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Configure Payout Account (KYC)',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF0F172A),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Verified Bank or UPI details unlock Online Razorpay fee collection in your Private Studio.',
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('Bank Account')),
+                            selected: selectedMethod == 'bank_account',
+                            onSelected: (_) =>
+                                setSheetState(() => selectedMethod = 'bank_account'),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: ChoiceChip(
+                            label: const Center(child: Text('UPI ID')),
+                            selected: selectedMethod == 'upi',
+                            onSelected: (_) =>
+                                setSheetState(() => selectedMethod = 'upi'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+                    TextFormField(
+                      initialValue: holderName,
+                      onChanged: (v) => holderName = v,
+                      validator: (v) =>
+                          v == null || v.trim().isEmpty ? 'Enter account holder name' : null,
+                      decoration: const InputDecoration(
+                        labelText: 'Account Holder Name',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (selectedMethod == 'bank_account') ...[
+                      TextFormField(
+                        initialValue: bankName,
+                        onChanged: (v) => bankName = v,
+                        validator: (v) =>
+                            v == null || v.trim().isEmpty ? 'Enter bank name' : null,
+                        decoration: const InputDecoration(
+                          labelText: 'Bank Name',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        initialValue: accountNumber,
+                        onChanged: (v) => accountNumber = v,
+                        keyboardType: TextInputType.number,
+                        validator: (v) {
+                          final trimmed = v?.trim() ?? '';
+                          if (!RegExp(r'^\d{8,20}$').hasMatch(trimmed)) {
+                            return 'Enter 8–20 digit account number';
+                          }
+                          return null;
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Account Number',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        initialValue: ifscCode,
+                        onChanged: (v) => ifscCode = v.toUpperCase(),
+                        textCapitalization: TextCapitalization.characters,
+                        validator: (v) {
+                          final trimmed = (v ?? '').trim().toUpperCase();
+                          if (!RegExp(r'^[A-Z]{4}0[A-Z0-9]{6}$').hasMatch(trimmed)) {
+                            return 'Enter valid 11-char IFSC (e.g. HDFC0001234)';
+                          }
+                          return null;
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'IFSC Code',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ] else ...[
+                      TextFormField(
+                        initialValue: upiId,
+                        onChanged: (v) => upiId = v,
+                        validator: (v) {
+                          final trimmed = (v ?? '').trim();
+                          if (!RegExp(r'^[\w.-]{2,}@[a-zA-Z]{2,}$').hasMatch(trimmed)) {
+                            return 'Enter valid UPI ID (e.g. name@okaxis)';
+                          }
+                          return null;
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'UPI ID',
+                          hintText: 'tutor@okaxis',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 18),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                if (!(formKey.currentState?.validate() ?? false)) {
+                                  return;
+                                }
+                                setSheetState(() => isSaving = true);
+                                try {
+                                  await PayoutService.upsertMyPayoutAccount(
+                                    method: selectedMethod,
+                                    accountHolderName: holderName,
+                                    bankName: selectedMethod == 'bank_account'
+                                        ? bankName
+                                        : null,
+                                    accountNumber: selectedMethod == 'bank_account'
+                                        ? accountNumber
+                                        : null,
+                                    ifscCode: selectedMethod == 'bank_account'
+                                        ? ifscCode
+                                        : null,
+                                    upiId: selectedMethod == 'upi' ? upiId : null,
+                                  );
+                                  if (!ctx.mounted) return;
+                                  Navigator.pop(ctx);
+                                  if (mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Payout details saved! Sent for KYC verification.',
+                                        ),
+                                        backgroundColor: AppColors.success,
+                                      ),
+                                    );
+                                    _fetchReport();
+                                  }
+                                } catch (e) {
+                                  setSheetState(() => isSaving = false);
+                                  if (ctx.mounted) {
+                                    ScaffoldMessenger.of(ctx).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Failed to save KYC details: $e'),
+                                        backgroundColor: AppColors.error,
+                                      ),
+                                    );
+                                  }
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: isSaving
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Text(
+                                'Save & Submit for KYC',
+                                style: TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showPrivateStudioSettingsDialog() {
+    final studio = _privateTeaching ?? {};
+    bool isEnabled = studio['isEnabled'] == true;
+    bool acceptSelfJoinRequests = studio['acceptSelfJoinRequests'] != false;
+    String headline = (studio['headline'] ?? '').toString();
+    String city = (studio['city'] ?? '').toString();
+    bool isSaving = false;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) {
+          return AlertDialog(
+            title: const Text('Private Studio Settings'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Enable Private Tuition Studio'),
+                    subtitle: const Text(
+                      'Teach private students outside your institutes',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: isEnabled,
+                    onChanged: (val) => setDialogState(() => isEnabled = val),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Accept Student Join Requests'),
+                    subtitle: const Text(
+                      'Let students search your studio & request to connect',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    value: acceptSelfJoinRequests,
+                    onChanged: isEnabled
+                        ? (val) =>
+                            setDialogState(() => acceptSelfJoinRequests = val)
+                        : null,
+                  ),
+                  const SizedBox(height: 10),
+                  TextFormField(
+                    initialValue: headline,
+                    onChanged: (v) => headline = v,
+                    decoration: const InputDecoration(
+                      labelText: 'Studio Headline',
+                      hintText: 'e.g. IIT-JEE Physics & Math Mentor',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    initialValue: city,
+                    onChanged: (v) => city = v,
+                    decoration: const InputDecoration(
+                      labelText: 'City',
+                      hintText: 'e.g. Kota / Delhi',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: isSaving ? null : () => Navigator.pop(ctx),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isSaving
+                    ? null
+                    : () async {
+                        setDialogState(() => isSaving = true);
+                        try {
+                          await PayoutService.updatePrivateTeachingSettings(
+                            isEnabled: isEnabled,
+                            acceptSelfJoinRequests: acceptSelfJoinRequests,
+                            headline: headline,
+                            city: city,
+                          );
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          if (mounted) {
+                            await Provider.of<WorkspaceProvider>(
+                              context,
+                              listen: false,
+                            ).refreshWorkspace();
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Private Studio settings updated!'),
+                                backgroundColor: AppColors.success,
+                              ),
+                            );
+                            _fetchReport();
+                          }
+                        } catch (e) {
+                          setDialogState(() => isSaving = false);
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text('Update failed: $e'),
+                                backgroundColor: AppColors.error,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                ),
+                child: Text(isSaving ? 'Saving...' : 'Save Settings'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

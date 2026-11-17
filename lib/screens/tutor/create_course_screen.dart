@@ -2,12 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
+import '../../services/payout_service.dart';
 import '../../services/upload_service.dart';
 import '../../providers/course_provider.dart';
 import '../../providers/category_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../models/category_model.dart';
 import '../../utils/constants.dart';
 import '../../widgets/audience_selector.dart';
+import 'earnings/tutor_earnings_screen.dart';
 
 class CreateCourseScreen extends StatefulWidget {
   const CreateCourseScreen({super.key});
@@ -21,12 +24,16 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
   final _titleController = TextEditingController();
   final _descriptionController = TextEditingController();
   final _priceController = TextEditingController();
+  final _offlineInstructionsController = TextEditingController();
   final _durationController = TextEditingController();
 
   CategoryModel? _selectedCategory;
   String _selectedLevel = 'beginner';
   String _selectedLanguage = 'English';
   bool _isFree = true;
+  String _pricingMode = 'offline'; // 'offline' | 'online'
+  String _payoutVerificationStatus = 'not_configured';
+  bool _loadingPayoutStatus = false;
 
   String _audienceScope = 'institute';
   List<String> _audienceBatchIds = [];
@@ -43,8 +50,33 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
+      setState(() {
+        _audienceScope =
+            workspace.isPrivateWorkspace ? 'tutor_network' : 'institute';
+      });
       Provider.of<CategoryProvider>(context, listen: false).fetchCategories();
+      _loadPayoutStatus();
     });
+  }
+
+  Future<void> _loadPayoutStatus() async {
+    setState(() => _loadingPayoutStatus = true);
+    try {
+      final res = await PayoutService.getMyPayoutAccount();
+      final status = (res['payoutAccount']?['verificationStatus'] ?? 'not_configured')
+          .toString();
+      if (!mounted) return;
+      setState(() {
+        _payoutVerificationStatus = status;
+        _loadingPayoutStatus = false;
+        if (status == 'verified') {
+          _pricingMode = 'online';
+        }
+      });
+    } catch (_) {
+      if (mounted) setState(() => _loadingPayoutStatus = false);
+    }
   }
 
   @override
@@ -52,6 +84,7 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _offlineInstructionsController.dispose();
     _durationController.dispose();
     _maxStudentsController.dispose();
     for (var controller in _requirementControllers) {
@@ -214,11 +247,20 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
             })
         .toList();
 
+    final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
+    final double numericPrice =
+        _isFree ? 0 : (double.tryParse(_priceController.text) ?? 0);
+    final String effectivePricingMode = (_isFree || numericPrice <= 0)
+        ? 'free'
+        : _pricingMode;
+
     final success = await courseProvider.createCourse(
       title: _titleController.text.trim(),
       description: _descriptionController.text.trim(),
       categoryId: _selectedCategory!.id,
-      price: _isFree ? 0 : double.tryParse(_priceController.text) ?? 0,
+      price: numericPrice,
+      pricingMode: effectivePricingMode,
+      offlinePaymentInstructions: _offlineInstructionsController.text.trim(),
       level: _selectedLevel,
       duration: double.tryParse(_durationController.text) ?? 0,
       language: _selectedLanguage,
@@ -227,7 +269,7 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
       whatYouWillLearn: whatYouWillLearn,
       requireApproval: _requireApproval,
       maxStudents: int.tryParse(_maxStudentsController.text) ?? 0,
-      visibility: _audienceScope == 'global' ? 'public' : 'institute',
+      visibility: workspace.isPrivateWorkspace ? 'public' : 'institute',
       thumbnail: _thumbnailUrl,
       audience: {
         'scope': _audienceScope,
@@ -472,6 +514,8 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 14),
+                _buildPricingModeCard(),
               ],
               const SizedBox(height: 24),
 
@@ -603,6 +647,141 @@ class _CreateCourseScreenState extends State<CreateCourseScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildPricingModeCard() {
+    final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
+    final bool isPrivateStudio = workspace.isPrivateWorkspace;
+    final bool isPayoutVerified = _payoutVerificationStatus == 'verified';
+    final bool onlineAllowed = !isPrivateStudio || isPayoutVerified;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.innerSurface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Text(
+            'Fee Collection Mode',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: AppColors.navy,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('Offline / Direct Fee'),
+                selected: _pricingMode == 'offline',
+                selectedColor: AppColors.primary,
+                labelStyle: TextStyle(
+                  color: _pricingMode == 'offline' ? Colors.white : AppColors.navy,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                ),
+                onSelected: (_) => setState(() => _pricingMode = 'offline'),
+              ),
+              ChoiceChip(
+                label: Text(
+                  onlineAllowed
+                      ? 'Online Razorpay'
+                      : 'Online Razorpay (KYC Required)',
+                ),
+                selected: _pricingMode == 'online',
+                selectedColor: AppColors.primary,
+                labelStyle: TextStyle(
+                  color: _pricingMode == 'online'
+                      ? Colors.white
+                      : (onlineAllowed ? AppColors.navy : AppColors.textMuted),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                ),
+                onSelected: (val) {
+                  if (!onlineAllowed) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Configure & verify your Bank/UPI payout account in Earnings before enabling online payments.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  setState(() => _pricingMode = 'online');
+                },
+              ),
+            ],
+          ),
+          if (isPrivateStudio && !isPayoutVerified) ...[
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.amber.shade50,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.amber.shade300),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _loadingPayoutStatus
+                        ? 'Checking Bank/UPI payout verification...'
+                        : 'Payout KYC Status: ${_payoutVerificationStatus.toUpperCase()}. Only Offline fees are enabled until your Bank Account or UPI ID is verified.',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      color: Colors.amber.shade900,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  TextButton.icon(
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const TutorEarningsScreen()),
+                      ).then((_) => _loadPayoutStatus());
+                    },
+                    icon: const Icon(Icons.account_balance_outlined, size: 16),
+                    label: const Text(
+                      'Setup Bank / UPI Payout Account',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          if (_pricingMode == 'offline') ...[
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _offlineInstructionsController,
+              maxLines: 3,
+              decoration: InputDecoration(
+                labelText: 'Offline Payment Instructions',
+                hintText:
+                    'e.g. Pay directly in class or UPI to tutor@okaxis and enter UTR',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }

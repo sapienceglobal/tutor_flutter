@@ -1,20 +1,17 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
+import 'api_service.dart';
 import 'auth_service.dart';
 
 class AnnouncementService {
   // Fetch announcements for student
   static Future<List<dynamic>> fetchStudentAnnouncements() async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.enrollmentsEndpoint}/my-announcements'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -29,14 +26,10 @@ class AnnouncementService {
   // Fetch announcements for tutor
   static Future<List<dynamic>> fetchTutorAnnouncements() async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.tutorsEndpoint}/announcements'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -51,15 +44,10 @@ class AnnouncementService {
   // Create course announcement
   static Future<bool> createCourseAnnouncement(String courseId, {required String title, required String message}) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.coursesEndpoint}/$courseId/announcements'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode({
         'title': title,
         'message': message,
@@ -76,15 +64,10 @@ class AnnouncementService {
   // Create batch announcement
   static Future<bool> createBatchAnnouncement(String batchId, {required String title, required String message}) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.batchesEndpoint}/$batchId/announcements'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode({
         'title': title,
         'message': message,

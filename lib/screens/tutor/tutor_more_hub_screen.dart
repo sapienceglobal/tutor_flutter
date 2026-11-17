@@ -330,7 +330,7 @@ class TutorMoreHubScreen extends StatelessWidget {
                           _buildHubTile(
                             context,
                             title: 'My Students',
-                            subtitle: 'Enrolled profiles',
+                            subtitle: 'Enrolled, requests & fees',
                             icon: Icons.people_outline_rounded,
                             color: AppColors.secondary,
                             tone: SapienceTileTone.green,
@@ -430,8 +430,9 @@ class TutorMoreHubScreen extends StatelessWidget {
                       const SizedBox(height: 10),
                       _buildListTile(
                         context,
-                        title: 'Manage Institutes',
-                        subtitle: 'Switch active institute & invite links',
+                        title: 'Workspaces, Institutes & Studio',
+                        subtitle:
+                            'Switch institute, send join request & invite links',
                         icon: Icons.business_outlined,
                         color: AppColors.primary,
                         targetScreen: const TutorInstitutesScreen(),
@@ -439,9 +440,9 @@ class TutorMoreHubScreen extends StatelessWidget {
                       const SizedBox(height: 10),
                       _buildListTile(
                         context,
-                        title: 'Personal Subscription',
+                        title: 'Private Studio Plan & AI Quota',
                         subtitle:
-                            'Upgrade membership to unlock smart AI features',
+                            'Manage private classroom plan & AI credits',
                         icon: Icons.stars_rounded,
                         color: const Color(0xFFE07A16),
                         targetScreen: const PersonalSubscriptionScreen(),

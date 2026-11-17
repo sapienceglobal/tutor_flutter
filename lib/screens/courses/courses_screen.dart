@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:provider/provider.dart';
 import '../../config/api_config.dart';
 import '../../models/course_model.dart';
 import '../../models/enrollment_model.dart';
+import '../../providers/workspace_provider.dart';
 import '../../services/course_service.dart';
 import '../../services/enrollment_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/constants.dart';
 import '../../widgets/sapience_ui.dart';
 import '../../widgets/shimmer_loader.dart';
+import '../../widgets/workspace_switcher.dart';
 import '../common/notifications/notifications_screen.dart';
 import 'course_detail_screen.dart';
 
@@ -24,24 +27,40 @@ class _CoursesScreenState extends State<CoursesScreen> {
   final TextEditingController _searchController = TextEditingController();
 
   List<EnrollmentModel> _enrolledCourses = [];
-  List<CourseModel> _instituteCourses = [];
-  List<CourseModel> _globalCourses = [];
+  List<CourseModel> _workspaceCourses = [];
+  String _lastWorkspaceSignature = '';
 
   bool _isLoading = true;
   int _unreadCount = 0;
 
-  // Filters matching PNG: All, Popular, New / Discover, In Progress
+  // Filters matching PNG: All, In Progress, Popular, Workspace
   String _selectedTab = 'All';
   String _searchQuery = '';
   String _selectedLevel = 'all';
   bool _showFreeOnly = false;
 
-  static const _filterPills = ['All', 'In Progress', 'Popular', 'Institute'];
+  static const _filterPills = ['All', 'In Progress', 'Popular', 'Free'];
 
   @override
   void initState() {
     super.initState();
     _loadAllData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final workspace = Provider.of<WorkspaceProvider>(context);
+    final sig =
+        '${workspace.workspaceType}|${workspace.activeInstituteId ?? ''}|${workspace.activeTutorFilterId ?? ''}';
+    if (_lastWorkspaceSignature.isNotEmpty && _lastWorkspaceSignature != sig) {
+      _lastWorkspaceSignature = sig;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadAllData();
+      });
+    } else {
+      _lastWorkspaceSignature = sig;
+    }
   }
 
   @override
@@ -56,16 +75,14 @@ class _CoursesScreenState extends State<CoursesScreen> {
     try {
       final results = await Future.wait([
         EnrollmentService.getMyEnrollments().catchError((_) => <EnrollmentModel>[]),
-        CourseService.getAllCourses(scope: 'institute').catchError((_) => <CourseModel>[]),
-        CourseService.getAllCourses(scope: 'global').catchError((_) => <CourseModel>[]),
+        CourseService.getAllCourses().catchError((_) => <CourseModel>[]),
         NotificationService.getUnreadCount().catchError((_) => 0),
       ]);
       if (!mounted) return;
       setState(() {
         _enrolledCourses = results[0] as List<EnrollmentModel>;
-        _instituteCourses = results[1] as List<CourseModel>;
-        _globalCourses = results[2] as List<CourseModel>;
-        _unreadCount = results[3] as int;
+        _workspaceCourses = results[1] as List<CourseModel>;
+        _unreadCount = results[2] as int;
         _isLoading = false;
       });
     } catch (_) {
@@ -94,14 +111,11 @@ class _CoursesScreenState extends State<CoursesScreen> {
   List<CourseModel> get _combinedCatalog {
     final seen = <String>{};
     final out = <CourseModel>[];
+    for (final c in _workspaceCourses) {
+      if (seen.add(c.id)) out.add(c);
+    }
     for (final e in _enrolledCourses) {
       if (seen.add(e.course.id)) out.add(e.course);
-    }
-    for (final c in _instituteCourses) {
-      if (seen.add(c.id)) out.add(c);
-    }
-    for (final c in _globalCourses) {
-      if (seen.add(c.id)) out.add(c);
     }
     return out;
   }
@@ -110,8 +124,8 @@ class _CoursesScreenState extends State<CoursesScreen> {
     List<CourseModel> base;
     if (_selectedTab == 'In Progress') {
       base = _enrolledCourses.map((e) => e.course).toList();
-    } else if (_selectedTab == 'Institute') {
-      base = List<CourseModel>.from(_instituteCourses);
+    } else if (_selectedTab == 'Free') {
+      base = _combinedCatalog.where((c) => c.isFree).toList();
     } else if (_selectedTab == 'Popular') {
       base = List<CourseModel>.from(_combinedCatalog)
         ..sort((a, b) => b.enrolledCount.compareTo(a.enrolledCount));
@@ -178,6 +192,13 @@ class _CoursesScreenState extends State<CoursesScreen> {
                     },
                   ),
                 ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: WorkspaceSwitcherBar(
+                  compact: true,
+                  onWorkspaceChanged: _loadAllData,
+                ),
               ),
               // Search Pill Bar (exact match to Modern Courses Dashboard App UI.png)
               Padding(

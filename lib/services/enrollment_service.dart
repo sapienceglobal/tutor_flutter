@@ -6,14 +6,29 @@ import 'auth_service.dart';
 class EnrollmentService {
   static const String _endpoint = '/enrollments';
 
-  // Enroll in course
-  static Future<Map<String, dynamic>> enrollInCourse(String courseId) async {
+  // Enroll in course (free, online payment verified, or offline fee submission)
+  static Future<Map<String, dynamic>> enrollInCourse(
+    String courseId, {
+    String? batchId,
+    String? paymentId,
+    String? note,
+    String? transactionRef,
+    double? declaredAmount,
+  }) async {
     try {
       final token = await AuthService.getToken();
 
       final response = await ApiService.post(
         _endpoint,
-        body: {'courseId': courseId},
+        body: {
+          'courseId': courseId,
+          if (batchId != null && batchId.isNotEmpty) 'batchId': batchId,
+          if (paymentId != null && paymentId.isNotEmpty) 'paymentId': paymentId,
+          if (note != null && note.trim().isNotEmpty) 'note': note.trim(),
+          if (transactionRef != null && transactionRef.trim().isNotEmpty)
+            'transactionRef': transactionRef.trim(),
+          if (declaredAmount != null) 'declaredAmount': declaredAmount,
+        },
         token: token,
       );
 
@@ -21,6 +36,48 @@ class EnrollmentService {
     } catch (e) {
       throw Exception(e.toString());
     }
+  }
+
+  // Get pending offline fee payment submissions (Tutor / Institute Admin)
+  static Future<List<Map<String, dynamic>>> getOfflinePendingEnrollments() async {
+    try {
+      final token = await AuthService.getToken();
+      final response = await ApiService.get(
+        '$_endpoint/offline-pending',
+        token: token,
+      );
+      if (response['success'] == true) {
+        final raw = response['enrollments'] as List? ?? const [];
+        return raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+      return [];
+    } catch (e) {
+      throw Exception(e.toString());
+    }
+  }
+
+  // Approve an offline fee enrollment (Tutor / Admin)
+  static Future<Map<String, dynamic>> approveOfflineEnrollment(
+    String enrollmentId, {
+    String? adminNote,
+  }) async {
+    final token = await AuthService.getToken();
+    return ApiService.patch(
+      '$_endpoint/$enrollmentId/approve-offline',
+      body: {
+        if (adminNote != null && adminNote.trim().isNotEmpty) 'adminNote': adminNote.trim(),
+      },
+      token: token,
+    );
+  }
+
+  // Reject a pending enrollment (Tutor / Admin)
+  static Future<Map<String, dynamic>> rejectEnrollment(String enrollmentId) async {
+    final token = await AuthService.getToken();
+    return ApiService.delete(
+      '$_endpoint/$enrollmentId/reject',
+      token: token,
+    );
   }
 
   // Get my enrollments

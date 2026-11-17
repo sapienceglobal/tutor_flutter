@@ -62,6 +62,57 @@ class PayoutService {
     }
   }
 
+  // Fetch tutor payout KYC status & Private Teaching config (GET /api/tutors/payout-account)
+  static Future<Map<String, dynamic>> getMyPayoutAccount() async {
+    final token = await AuthService.getToken();
+    return ApiService.get('/tutors/payout-account', token: token);
+  }
+
+  // Save/update Bank Account or UPI payout KYC details (PUT /api/tutors/payout-account)
+  static Future<Map<String, dynamic>> upsertMyPayoutAccount({
+    required String method, // 'bank_account' | 'upi'
+    required String accountHolderName,
+    String? bankName,
+    String? accountNumber,
+    String? ifscCode,
+    String? upiId,
+  }) async {
+    final token = await AuthService.getToken();
+    return ApiService.put(
+      '/tutors/payout-account',
+      body: {
+        'method': method,
+        'accountHolderName': accountHolderName.trim(),
+        if (bankName != null && bankName.trim().isNotEmpty) 'bankName': bankName.trim(),
+        if (accountNumber != null && accountNumber.trim().isNotEmpty)
+          'accountNumber': accountNumber.trim(),
+        if (ifscCode != null && ifscCode.trim().isNotEmpty) 'ifscCode': ifscCode.trim().toUpperCase(),
+        if (upiId != null && upiId.trim().isNotEmpty) 'upiId': upiId.trim().toLowerCase(),
+      },
+      token: token,
+    );
+  }
+
+  // Update Private Teaching Studio visibility & discovery settings (PUT /api/tutors/private-teaching)
+  static Future<Map<String, dynamic>> updatePrivateTeachingSettings({
+    required bool isEnabled,
+    required bool acceptSelfJoinRequests,
+    String? headline,
+    String? city,
+  }) async {
+    final token = await AuthService.getToken();
+    return ApiService.put(
+      '/tutors/private-teaching',
+      body: {
+        'isEnabled': isEnabled,
+        'acceptSelfJoinRequests': acceptSelfJoinRequests,
+        if (headline != null) 'headline': headline.trim(),
+        if (city != null) 'city': city.trim(),
+      },
+      token: token,
+    );
+  }
+
   // Cancel a pending payout request
   static Future<Map<String, dynamic>> cancelPayout(String payoutId) async {
     try {

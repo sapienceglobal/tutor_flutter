@@ -2,23 +2,18 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/assignment_model.dart';
+import 'api_service.dart';
 import 'auth_service.dart';
 
 class AssignmentService {
-  final AuthService _authService = AuthService();
-
   Future<List<Assignment>> fetchAssignments() async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     // The backend seems to provide assignments via individual course calls or a dedicated list
     // Based on the web controller, we'll fetch my enrollments first then their assignments
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.enrollmentsEndpoint}/my-enrollments'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -35,10 +30,7 @@ class AssignmentService {
         try {
           final asgnRes = await http.get(
             Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/course/$cid'),
-            headers: {
-              'Authorization': 'Bearer $token',
-              'x-api-key': apiKey ?? '',
-            },
+            headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
           );
 
           if (asgnRes.statusCode == 200) {
@@ -76,14 +68,10 @@ class AssignmentService {
 
   Future<List<Assignment>> fetchAssignmentsByCourse(String courseId) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/course/$courseId'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -96,14 +84,10 @@ class AssignmentService {
 
   Future<Assignment> fetchAssignmentDetails(String id) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/$id'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -135,15 +119,10 @@ class AssignmentService {
 
   Future<bool> submitAssignment(String assignmentId, {String? content, List<Map<String, dynamic>>? attachments}) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/$assignmentId/submit'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode({
         'content': content,
         'attachments': attachments ?? [],
@@ -169,15 +148,10 @@ class AssignmentService {
     String status = 'published',
   }) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode({
         'courseId': courseId,
         if (batchId != null) 'batchId': batchId,
@@ -208,15 +182,10 @@ class AssignmentService {
     String? status,
   }) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.patch(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/$id'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode({
         if (title != null) 'title': title,
         if (description != null) 'description': description,
@@ -237,14 +206,10 @@ class AssignmentService {
 
   Future<bool> deleteAssignment(String id) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.delete(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/$id'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -256,14 +221,10 @@ class AssignmentService {
 
   Future<List<Map<String, dynamic>>> getAssignmentSubmissions(String id) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/$id/submissions'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -282,15 +243,10 @@ class AssignmentService {
     String? feedback,
   }) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.patch(
       Uri.parse('${ApiConfig.baseUrl}${ApiConfig.assignmentsEndpoint}/submissions/$submissionId/grade'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode({
         'grade': grade,
         'feedback': feedback ?? '',

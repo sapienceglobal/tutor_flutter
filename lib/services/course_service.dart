@@ -87,6 +87,8 @@ class CourseService {
           'course': CourseModel.fromJson(response['course']),
           'lessons': response['lessons'],
           'isEnrolled': response['isEnrolled'] ?? false,
+          'enrollmentStatus': response['enrollmentStatus']?.toString(),
+          'enrollment': response['enrollment'],
         };
       }
       return null;
@@ -151,6 +153,8 @@ class CourseService {
     required String categoryId,
     String? thumbnail,
     double price = 0,
+    String pricingMode = 'free',
+    String? offlinePaymentInstructions,
     String level = 'beginner',
     double duration = 0,
     String language = 'English',
@@ -173,6 +177,10 @@ class CourseService {
           'categoryId': categoryId,
           if (thumbnail != null) 'thumbnail': thumbnail,
           'price': price,
+          'pricingMode': pricingMode,
+          if (offlinePaymentInstructions != null &&
+              offlinePaymentInstructions.trim().isNotEmpty)
+            'offlinePaymentInstructions': offlinePaymentInstructions.trim(),
           'level': level,
           'duration': duration,
           'language': language,

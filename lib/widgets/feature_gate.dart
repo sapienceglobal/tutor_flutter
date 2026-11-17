@@ -30,6 +30,11 @@ class FeatureGate extends StatelessWidget {
       );
     }
 
+    // Students always have unrestricted free access to all learning and AI features
+    if (subProvider.role == 'student') {
+      return child;
+    }
+
     // Check access based on personal vs institute context
     final bool hasAccess = subProvider.hasFeature(featureKey, isPersonal: isPersonal);
 
@@ -48,7 +53,7 @@ class FeatureGate extends StatelessWidget {
             ),
             Positioned.fill(
               child: Container(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
                 child: Center(
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -57,7 +62,7 @@ class FeatureGate extends StatelessWidget {
                       borderRadius: BorderRadius.circular(20),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
+                          color: Colors.black.withValues(alpha: 0.1),
                           blurRadius: 10,
                         )
                       ],
@@ -91,10 +96,12 @@ class FeatureGate extends StatelessWidget {
     return fallback ?? const SizedBox.shrink();
   }
 
-  /// Shows a premium upsell bottom sheet matching web's UpsellModal
+  /// Shows a workspace-aware lock sheet matching web's UpsellModal
+  /// Note: Students pay ₹0 — never prompt students to purchase a platform plan.
   void _showUpsellModal(BuildContext context, SubscriptionProvider subProvider) {
     final role = subProvider.role ?? 'student';
     final planName = subProvider.planName;
+    final isPrivateStudio = subProvider.isPrivateStudioMode;
 
     final featureDetails = {
       'zoomIntegration': {'label': 'Zoom Live Classes', 'icon': Icons.videocam_outlined, 'color': Colors.blue},
@@ -166,7 +173,7 @@ class FeatureGate extends StatelessWidget {
                           borderRadius: BorderRadius.circular(28),
                           boxShadow: [
                             BoxShadow(
-                              color: const Color(0xFFF97316).withOpacity(0.4),
+                              color: const Color(0xFFF97316).withValues(alpha: 0.4),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),
@@ -175,9 +182,13 @@ class FeatureGate extends StatelessWidget {
                         child: const Icon(Icons.workspace_premium, color: Colors.white, size: 28),
                       ),
                       const SizedBox(height: 14),
-                      const Text(
-                        'Unlock Your True Potential',
-                        style: TextStyle(
+                      Text(
+                        role == 'student'
+                            ? 'Workspace Feature Unavailable'
+                            : isPrivateStudio
+                                ? 'Upgrade Private Studio'
+                                : 'Workspace Plan Limit',
+                        style: const TextStyle(
                           color: Colors.white,
                           fontSize: 20,
                           fontWeight: FontWeight.w900,
@@ -185,9 +196,13 @@ class FeatureGate extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        role == 'admin'
-                            ? "Upgrade your institute's plan to access enterprise-grade features."
-                            : "This feature requires a premium plan. Upgrade to supercharge your experience!",
+                        role == 'student'
+                            ? 'This platform is 100% free for students. Access depends on your active Institute or Private Tutor plan.'
+                            : role == 'admin'
+                                ? "Upgrade your institute's plan to unlock capacity and monthly AI credits."
+                                : isPrivateStudio
+                                    ? 'Upgrade your Private Studio plan to unlock higher student limits and monthly AI credits.'
+                                    : 'This feature is managed by your Institute plan. Switch to your Private Studio or contact your Institute Admin.',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.blue.shade100,
@@ -205,16 +220,16 @@ class FeatureGate extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: (feature['color'] as Color).withOpacity(0.06),
+                      color: (feature['color'] as Color).withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: (feature['color'] as Color).withOpacity(0.15)),
+                      border: Border.all(color: (feature['color'] as Color).withValues(alpha: 0.15)),
                     ),
                     child: Row(
                       children: [
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: (feature['color'] as Color).withOpacity(0.12),
+                            color: (feature['color'] as Color).withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(feature['icon'] as IconData, color: feature['color'] as Color, size: 22),
@@ -230,7 +245,11 @@ class FeatureGate extends StatelessWidget {
                               ),
                               const SizedBox(height: 3),
                               Text(
-                                'Requires premium subscription',
+                                role == 'student'
+                                    ? 'Managed by your Workspace Owner'
+                                    : isPrivateStudio
+                                        ? 'Requires upgraded Private Studio plan'
+                                        : 'Managed by Institute Subscription',
                                 style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
                               ),
                             ],
@@ -272,7 +291,7 @@ class FeatureGate extends StatelessWidget {
                         Icon(Icons.info_outline, size: 16, color: Colors.grey.shade500),
                         const SizedBox(width: 8),
                         Text(
-                          'Current Plan: ',
+                          'Workspace Plan: ',
                           style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
                         ),
                         Container(
@@ -292,38 +311,39 @@ class FeatureGate extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // Upgrade button
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const PersonalSubscriptionScreen()),
-                        );
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF6B4DF1),
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        elevation: 4,
-                        shadowColor: const Color(0xFF6B4DF1).withOpacity(0.4),
-                      ),
-                      child: const Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.rocket_launch, size: 18),
-                          SizedBox(width: 8),
-                          Text('View Upgrade Plans', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                        ],
+                // Action button (Only Tutors in Private Studio see personal upgrade button)
+                if (role == 'tutor' && isPrivateStudio)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (_) => const PersonalSubscriptionScreen()),
+                          );
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF6B4DF1),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 4,
+                          shadowColor: const Color(0xFF6B4DF1).withValues(alpha: 0.4),
+                        ),
+                        child: const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.rocket_launch, size: 18),
+                            SizedBox(width: 8),
+                            Text('Upgrade Private Studio Plan', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
                 const SizedBox(height: 24),
               ],
             ),

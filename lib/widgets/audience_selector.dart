@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../providers/workspace_provider.dart';
 import '../services/batch_service.dart';
 import '../services/enrollment_service.dart';
 import '../utils/constants.dart';
@@ -114,12 +116,30 @@ class _AudienceSelectorState extends State<AudienceSelector> {
 
   @override
   Widget build(BuildContext context) {
+    final workspace = Provider.of<WorkspaceProvider>(context);
+    final isPrivate = workspace.isPrivateWorkspace;
+    final String defaultScope = isPrivate ? 'tutor_network' : 'institute';
+    final List<String> allowedScopes = isPrivate
+        ? const ['tutor_network', 'batch', 'private']
+        : const ['institute', 'batch', 'private'];
+
+    final String effectiveScope =
+        allowedScopes.contains(_scope) ? _scope : defaultScope;
+    if (effectiveScope != _scope) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scope != effectiveScope) {
+          setState(() => _scope = effectiveScope);
+          _triggerChange();
+        }
+      });
+    }
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFF1EFFD), // matching the outerCard shade (#EAE8FA / #F1EFFD)
+        color: const Color(0xFFF1EFFD),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.primary.withOpacity(0.15), width: 1),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.15), width: 1),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -140,23 +160,31 @@ class _AudienceSelectorState extends State<AudienceSelector> {
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<String>(
-            initialValue: _scope,
+            initialValue: effectiveScope,
             decoration: InputDecoration(
               isDense: true,
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              fillColor: const Color(0xFFE8E5FB), // Inner box color
+              fillColor: const Color(0xFFE8E5FB),
               filled: true,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
                 borderSide: BorderSide.none,
               ),
             ),
-            items: const [
-              DropdownMenuItem(value: 'global', child: Text('Global (All Learners)')),
-              DropdownMenuItem(value: 'institute', child: Text('Institute Only')),
-              DropdownMenuItem(value: 'batch', child: Text('Specific Batches')),
-              DropdownMenuItem(value: 'private', child: Text('Private (Target Students)')),
-            ],
+            items: isPrivate
+                ? const [
+                    DropdownMenuItem(
+                      value: 'tutor_network',
+                      child: Text('My Private Students'),
+                    ),
+                    DropdownMenuItem(value: 'batch', child: Text('Specific Batches')),
+                    DropdownMenuItem(value: 'private', child: Text('Selected Students')),
+                  ]
+                : const [
+                    DropdownMenuItem(value: 'institute', child: Text('Institute Members')),
+                    DropdownMenuItem(value: 'batch', child: Text('Specific Batches')),
+                    DropdownMenuItem(value: 'private', child: Text('Selected Students')),
+                  ],
             onChanged: (value) {
               if (value != null) {
                 setState(() {

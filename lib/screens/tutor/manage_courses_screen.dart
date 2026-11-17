@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import '../../providers/course_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../utils/constants.dart';
 import '../../widgets/sapience_ui.dart';
+import '../../widgets/workspace_switcher.dart';
 import 'create_course_screen.dart';
 import 'edit_course_screen.dart';
 import 'manage_lessons_screen.dart';
@@ -22,6 +24,7 @@ class ManageCoursesScreen extends StatefulWidget {
 
 class _ManageCoursesScreenState extends State<ManageCoursesScreen> {
   int _selectedTab = 0; // 0: Published, 1: Drafts, 2: Archived
+  String? _lastWorkspaceSignature;
 
   @override
   void initState() {
@@ -29,6 +32,24 @@ class _ManageCoursesScreenState extends State<ManageCoursesScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CourseProvider>(context, listen: false).fetchMyCourses();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final ws = Provider.of<WorkspaceProvider>(context);
+    final signature = '${ws.workspaceType}|${ws.activeInstituteId ?? ''}';
+    if (_lastWorkspaceSignature == null) {
+      _lastWorkspaceSignature = signature;
+      return;
+    }
+    if (_lastWorkspaceSignature != signature) {
+      _lastWorkspaceSignature = signature;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Provider.of<CourseProvider>(context, listen: false).fetchMyCourses();
+      });
+    }
   }
 
   @override
@@ -85,6 +106,15 @@ class _ManageCoursesScreenState extends State<ManageCoursesScreen> {
                     ),
                   ),
                 ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 2, 16, 8),
+                child: WorkspaceSwitcherBar(
+                  compact: true,
+                  onWorkspaceChanged: () {
+                    courseProvider.fetchMyCourses();
+                  },
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),

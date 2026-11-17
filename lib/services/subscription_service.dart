@@ -3,21 +3,19 @@ import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/subscription_plan_model.dart';
 import '../models/institute_model.dart';
+import 'api_service.dart';
 import 'auth_service.dart';
 
 class SubscriptionService {
-  final AuthService _authService = AuthService();
-
-  Future<List<SubscriptionPlan>> fetchPlans() async {
+  Future<List<SubscriptionPlan>> fetchPlans({String? planRole}) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
+    final url = planRole != null && planRole.isNotEmpty
+        ? '${ApiConfig.baseUrl}/subscriptions?planRole=$planRole'
+        : '${ApiConfig.baseUrl}/subscriptions';
 
     final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/subscriptions'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      Uri.parse(url),
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -33,14 +31,10 @@ class SubscriptionService {
 
   Future<Institute> fetchInstituteData() async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}/user-institute/me'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -54,15 +48,10 @@ class SubscriptionService {
 
   Future<Map<String, dynamic>> createPersonalRenewalOrder(String planId) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/payments/renew-subscription'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode({
         'planId': planId,
       }),
@@ -79,15 +68,10 @@ class SubscriptionService {
 
   Future<Map<String, dynamic>> createRenewalOrder(String planId, String instituteId) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/payments/renew-subscription'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode({
         'planId': planId,
         'instituteId': instituteId,
@@ -105,15 +89,10 @@ class SubscriptionService {
 
   Future<bool> verifyPayment(Map<String, dynamic> paymentData) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/payments/verify'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode(paymentData),
     );
 

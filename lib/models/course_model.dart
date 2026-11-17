@@ -42,6 +42,9 @@ class CourseModel {
   final TutorModel tutor;
   final double price;
   final bool isFree;
+  final String pricingMode;
+  final String offlinePaymentInstructions;
+  final String? instituteId;
   final String level;
   final double duration;
   final String language;
@@ -65,6 +68,9 @@ class CourseModel {
     required this.tutor,
     this.price = 0,
     this.isFree = true,
+    this.pricingMode = 'free',
+    this.offlinePaymentInstructions = '',
+    this.instituteId,
     this.level = 'beginner',
     this.duration = 0,
     this.language = 'English',
@@ -142,6 +148,15 @@ class CourseModel {
         return [];
       }
 
+      final double parsedPrice = (json['price'] ?? 0).toDouble();
+      final bool parsedIsFree = json['isFree'] ?? (parsedPrice <= 0);
+      final String parsedPricingMode = json['pricingMode']?.toString() ??
+          (parsedIsFree || parsedPrice <= 0 ? 'free' : 'online');
+      final dynamic rawInst = json['instituteId'];
+      final String? parsedInstId = rawInst == null
+          ? null
+          : (rawInst is Map ? rawInst['_id']?.toString() : rawInst.toString());
+
       final course = CourseModel(
         id: json['_id']?.toString() ?? '',
         title: json['title']?.toString() ?? 'Untitled Course',
@@ -149,8 +164,12 @@ class CourseModel {
         thumbnail: json['thumbnail']?.toString() ?? 'https://via.placeholder.com/400x250',
         category: category,
         tutor: tutor,
-        price: (json['price'] ?? 0).toDouble(),
-        isFree: json['isFree'] ?? true,
+        price: parsedPrice,
+        isFree: parsedIsFree,
+        pricingMode: parsedPricingMode,
+        offlinePaymentInstructions:
+            json['offlinePaymentInstructions']?.toString() ?? '',
+        instituteId: parsedInstId,
         level: json['level']?.toString() ?? 'beginner',
         duration: (json['duration'] ?? 0).toDouble(),
         language: json['language']?.toString() ?? 'English',
@@ -191,6 +210,9 @@ class CourseModel {
       'tutorId': tutor.toJson(),
       'price': price,
       'isFree': isFree,
+      'pricingMode': pricingMode,
+      'offlinePaymentInstructions': offlinePaymentInstructions,
+      'instituteId': instituteId,
       'level': level,
       'duration': duration,
       'language': language,

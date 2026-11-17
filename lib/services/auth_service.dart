@@ -10,13 +10,115 @@ class AuthService {
   static const String _userKey = 'user_data';
   static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
-  // Register user
+  // Search listed institutes for closed-workspace signup / join requests
+  static Future<List<Map<String, dynamic>>> searchPublicInstitutes({
+    String search = '',
+    String city = '',
+  }) async {
+    final query = <String, String>{};
+    if (search.trim().isNotEmpty) query['search'] = search.trim();
+    if (city.trim().isNotEmpty) query['city'] = city.trim();
+    final response = await ApiService.get(
+      '${ApiConfig.authEndpoint}/institutes',
+      queryParams: query.isEmpty ? null : query,
+    );
+    final raw = response['institutes'] as List? ?? const [];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  // Search opt-in private tutors for closed-workspace signup / join requests
+  static Future<List<Map<String, dynamic>>> searchPublicTutors({
+    String search = '',
+    String subject = '',
+    String city = '',
+  }) async {
+    final query = <String, String>{};
+    if (search.trim().isNotEmpty) query['search'] = search.trim();
+    if (subject.trim().isNotEmpty) query['subject'] = subject.trim();
+    if (city.trim().isNotEmpty) query['city'] = city.trim();
+    final response = await ApiService.get(
+      '${ApiConfig.authEndpoint}/tutors',
+      queryParams: query.isEmpty ? null : query,
+    );
+    final raw = response['tutors'] as List? ?? const [];
+    return raw.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  // Send OTP for email registration
+  static Future<Map<String, dynamic>> sendOtp({
+    required String email,
+    String purpose = 'email-verification',
+  }) async {
+    return ApiService.post(
+      '${ApiConfig.authEndpoint}/send-otp',
+      body: {
+        'email': email.trim(),
+        'purpose': purpose,
+      },
+    );
+  }
+
+  // Verify OTP and register user with closed-workspace join targets
+  static Future<Map<String, dynamic>> verifyOtpAndRegister({
+    required String name,
+    required String email,
+    required String password,
+    required String phone,
+    required String otp,
+    String role = 'student',
+    String purpose = 'email-verification',
+    String? instituteId,
+    List<String>? tutorIds,
+    String? inviteToken,
+    String? requestMessage,
+    String? subjects,
+    String? title,
+    String? bio,
+  }) async {
+    final response = await ApiService.post(
+      '${ApiConfig.authEndpoint}/verify-otp-and-register',
+      body: {
+        'name': name.trim(),
+        'email': email.trim(),
+        'password': password,
+        'phone': phone.trim(),
+        'role': role,
+        'otp': otp.trim(),
+        'purpose': purpose,
+        if (instituteId != null && instituteId.isNotEmpty) 'instituteId': instituteId,
+        if (tutorIds != null && tutorIds.isNotEmpty) 'tutorIds': tutorIds,
+        if (inviteToken != null && inviteToken.isNotEmpty) 'inviteToken': inviteToken.trim(),
+        if (requestMessage != null && requestMessage.trim().isNotEmpty)
+          'requestMessage': requestMessage.trim(),
+        if (subjects != null && subjects.trim().isNotEmpty) 'subjects': subjects.trim(),
+        if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+        if (bio != null && bio.trim().isNotEmpty) 'bio': bio.trim(),
+      },
+    );
+
+    if (response['success'] == true && response['token'] != null && response['user'] != null) {
+      await _saveAuthData(
+        token: response['token'],
+        user: UserModel.fromJson(response['user']),
+      );
+    }
+    return response;
+  }
+
+  // Register user (supports optional instituteId, tutorIds, inviteToken, subjects, title)
   static Future<Map<String, dynamic>> register({
     required String name,
     required String email,
     required String password,
     required String phone,
     String role = 'student',
+    String? instituteId,
+    List<String>? tutorIds,
+    String? inviteToken,
+    String? requestMessage,
+    String? subjects,
+    String? title,
+    String? bio,
   }) async {
     try {
       final response = await ApiService.post(
@@ -27,10 +129,21 @@ class AuthService {
           'password': password,
           'phone': phone,
           'role': role,
+          if (instituteId != null && instituteId.isNotEmpty) 'instituteId': instituteId,
+          if (tutorIds != null && tutorIds.isNotEmpty) 'tutorIds': tutorIds,
+          if (inviteToken != null && inviteToken.isNotEmpty) ...{
+            'registrationType': 'invite',
+            'inviteToken': inviteToken.trim(),
+          },
+          if (requestMessage != null && requestMessage.trim().isNotEmpty)
+            'requestMessage': requestMessage.trim(),
+          if (subjects != null && subjects.trim().isNotEmpty) 'subjects': subjects.trim(),
+          if (title != null && title.trim().isNotEmpty) 'title': title.trim(),
+          if (bio != null && bio.trim().isNotEmpty) 'bio': bio.trim(),
         },
       );
 
-      if (response['success']) {
+      if (response['success'] == true && response['token'] != null && response['user'] != null) {
         await _saveAuthData(
           token: response['token'],
           user: UserModel.fromJson(response['user']),
@@ -67,8 +180,8 @@ class AuthService {
     }
   }
 
-  // Get current user
-  static Future<UserModel?> getCurrentUser() async {
+  // Fetch complete /auth/me payload (user + workspaceBootstrap + activeWorkspace)
+  static Future<Map<String, dynamic>?> getMePayload() async {
     try {
       final token = await getToken();
       if (token == null) return null;
@@ -78,15 +191,24 @@ class AuthService {
         token: token,
       );
 
-      if (response['success']) {
+      if (response['success'] == true && response['user'] != null) {
         final user = UserModel.fromJson(response['user']);
         await _saveUser(user);
-        return user;
+        return response;
       }
       return null;
     } catch (e) {
       return null;
     }
+  }
+
+  // Get current user
+  static Future<UserModel?> getCurrentUser() async {
+    final payload = await getMePayload();
+    if (payload != null && payload['user'] != null) {
+      return UserModel.fromJson(payload['user']);
+    }
+    return null;
   }
 
   static Future<String?> getUserId() async {
@@ -287,6 +409,7 @@ class AuthService {
 
   // Logout
   static Future<void> logout() async {
+    ApiService.clearWorkspaceHeaders();
     await _secureStorage.delete(key: _tokenKey);
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);

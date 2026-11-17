@@ -5,13 +5,16 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/subscription_provider.dart';
 import '../../providers/theme_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../utils/constants.dart';
 import '../../services/cloudinary_service.dart';
 import '../../services/dashboard_service.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/sapience_ui.dart';
 import '../auth/login_screen.dart';
+import '../auth/pending_approval_hub_screen.dart';
 import 'edit_profile_screen.dart';
 import 'change_password_screen.dart';
 import 'notification_settings_screen.dart';
@@ -425,6 +428,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         ),
                       ),
                       _buildPillRow(
+                        icon: Icons.workspaces_outline,
+                        iconColor: AppColors.primary,
+                        title: 'Workspaces & Join Requests',
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const PendingApprovalHubScreen(allowBackToPortal: true),
+                          ),
+                        ),
+                      ),
+                      _buildPillRow(
                         icon: Icons.help_outline_rounded,
                         iconColor: AppColors.primary,
                         title: localizations.translate('helpAndSupport'),
@@ -545,10 +560,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const SubscriptionScreen()));
                   },
                 )
-              else
+              else if (user?.role == 'tutor')
                 ListTile(
                   leading: const Icon(Icons.stars_rounded, color: AppColors.primary),
-                  title: const Text('Personal Subscription'),
+                  title: const Text('Private Studio Subscription'),
                   onTap: () {
                     Navigator.pop(ctx);
                     Navigator.push(context, MaterialPageRoute(builder: (_) => const PersonalSubscriptionScreen()));
@@ -941,7 +956,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (confirmed == true && mounted) {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+      final subscriptionProvider = Provider.of<SubscriptionProvider>(context, listen: false);
       await authProvider.logout();
+      workspaceProvider.clear();
+      subscriptionProvider.clear();
 
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(

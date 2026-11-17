@@ -292,6 +292,8 @@ class _ChatDetailScreenState extends State<ChatDetailScreen> {
           Expanded(
             child: TextField(
               controller: _messageCtrl,
+              onSubmitted: (_) => _sendMessage(),
+              textInputAction: TextInputAction.send,
               decoration: InputDecoration(
                 hintText: 'Type your message...',
                 hintStyle: TextStyle(fontSize: 13, color: Colors.grey[400]),

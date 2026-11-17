@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/subscription_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../utils/constants.dart';
 import '../../widgets/sapience_ui.dart';
 import '../home/home_screen.dart';
+import 'pending_approval_hub_screen.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -31,6 +34,8 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+    final subscriptionProvider = Provider.of<SubscriptionProvider>(context, listen: false);
 
     final success = await authProvider.login(
       email: _emailController.text.trim(),
@@ -39,9 +44,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
 
-    if (success) {
+    if (success && authProvider.user != null) {
+      await workspaceProvider.applyBootstrap(
+        authProvider.workspaceBootstrap,
+        userId: authProvider.user!.id,
+        role: authProvider.user!.role,
+      );
+      subscriptionProvider.syncWithWorkspace(
+        userMap: authProvider.rawUser ?? authProvider.user!.toJson(),
+        workspace: workspaceProvider,
+      );
+      if (!mounted) return;
+      final Widget target = workspaceProvider.hasActiveWorkspace
+          ? const HomeScreen()
+          : const PendingApprovalHubScreen();
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(builder: (_) => target),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

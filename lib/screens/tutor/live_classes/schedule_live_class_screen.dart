@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+import '../../../providers/workspace_provider.dart';
 import '../../../services/live_class_service.dart';
 import '../../../services/course_service.dart';
 import '../../../models/course_model.dart';
@@ -31,6 +33,15 @@ class _ScheduleLiveClassScreenState extends State<ScheduleLiveClassScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
+      if (mounted) {
+        setState(() {
+          _audienceScope =
+              workspace.isPrivateWorkspace ? 'tutor_network' : 'institute';
+        });
+      }
+    });
     _loadData();
   }
 

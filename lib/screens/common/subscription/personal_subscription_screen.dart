@@ -45,28 +45,31 @@ class _PersonalSubscriptionScreenState extends State<PersonalSubscriptionScreen>
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
-      // 1. Fetch available plans
-      final plans = await _subscriptionService.fetchPlans();
-      
-      // 2. Fetch current profile
+      // 1. Fetch current profile to know role & personalSubscription
       final token = await AuthService.getToken();
       final profileRes = await ApiService.get('/auth/me', token: token);
-      
+      final role = profileRes['user']?['role']?.toString() ?? 'student';
+
+      // 2. Students pay ₹0 — only fetch tutor/personal plans for educators
+      final plans = role == 'tutor'
+          ? await _subscriptionService.fetchPlans(planRole: 'tutor')
+          : <SubscriptionPlan>[];
+
+      if (!mounted) return;
       setState(() {
         _plans = plans;
+        _userRole = role;
         if (profileRes['success'] == true && profileRes['user'] != null) {
           _personalSub = profileRes['user']['personalSubscription'];
-          _userRole = profileRes['user']['role'] ?? 'student';
         }
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to load subscription details: $e')),
-        );
-      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load subscription details: $e')),
+      );
     }
   }
 
@@ -201,7 +204,12 @@ class _PersonalSubscriptionScreenState extends State<PersonalSubscriptionScreen>
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC),
       appBar: AppBar(
-        title: const Text('Personal Subscription Hub', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          _userRole == 'student'
+              ? 'Student Free Access'
+              : 'Private Studio Subscription',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
@@ -294,13 +302,41 @@ class _PersonalSubscriptionScreenState extends State<PersonalSubscriptionScreen>
                   _buildPremiumFeaturesList(),
                   const SizedBox(height: 28),
 
-                  // ─── AVAILABLE PLANS LIST ───
-                  const Text(
-                    'Choose Your Upgrade Plan',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
-                  ),
-                  const SizedBox(height: 12),
-                  _buildPlansSection(planName),
+                  // ─── AVAILABLE PLANS LIST (Tutor Only — Students Pay ₹0) ───
+                  if (_userRole == 'student')
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF7EE),
+                        borderRadius: AppThemeDesign.borderRadiusMedium,
+                        border: Border.all(color: const Color(0xFF86EFAC)),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.verified_rounded, color: Color(0xFF15803D), size: 28),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Students never pay any subscription fee. All AI & learning features are included through your approved Institute or Private Tutor workspace.',
+                              style: TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: Color(0xFF166534),
+                                height: 1.4,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else ...[
+                    const Text(
+                      'Choose Your Private Studio Plan',
+                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildPlansSection(planName),
+                  ],
                 ],
               ),
             ),
@@ -364,7 +400,9 @@ class _PersonalSubscriptionScreenState extends State<PersonalSubscriptionScreen>
   }
 
   Widget _buildPlansSection(String currentPlanName) {
-    final filteredPlans = _plans.where((p) => p.planRole == _userRole || p.planRole == 'all').toList();
+    final filteredPlans = _plans
+        .where((p) => p.planRole == 'tutor' || p.planRole == 'both' || p.planRole == 'all')
+        .toList();
     
     if (filteredPlans.isEmpty) {
       return const Card(

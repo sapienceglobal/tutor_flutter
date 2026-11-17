@@ -79,12 +79,7 @@ class _AiChatScreenState extends State<AiChatScreen> {
         _scrollToBottom();
       }
     } on ApiException catch (e) {
-      if (e.creditExhausted) {
-        _showCreditExhaustedDialog(e.message);
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
-      }
-      // Remove the optimistic user message if failed? Optional.
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send message: $e')));
     } finally {
@@ -92,28 +87,6 @@ class _AiChatScreenState extends State<AiChatScreen> {
         _isSending = false;
       });
     }
-  }
-
-  void _showCreditExhaustedDialog(String msg) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange),
-            SizedBox(width: 8),
-            Text('Credits Exhausted'),
-          ],
-        ),
-        content: Text(msg),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Okay'),
-          )
-        ],
-      ),
-    );
   }
 
   @override

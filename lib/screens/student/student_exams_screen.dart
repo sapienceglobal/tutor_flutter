@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../services/exam_service.dart';
 import '../../utils/constants.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/error_retry.dart';
 import '../../widgets/sapience_ui.dart';
 import '../../widgets/shimmer_loader.dart';
+import '../../widgets/workspace_switcher.dart';
 import 'analytics/student_analytics_screen.dart';
 import 'exam_instructions_screen.dart';
 import 'student_exam_result_screen.dart';
@@ -23,11 +26,28 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
   String? _errorMessage;
   List<dynamic> _exams = [];
   int _tabIndex = 0; // 0: All Tests, 1: Available, 2: Completed
+  String _lastWorkspaceSignature = '';
 
   @override
   void initState() {
     super.initState();
     _fetchExams();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final workspace = Provider.of<WorkspaceProvider>(context);
+    final sig =
+        '${workspace.workspaceType}|${workspace.activeInstituteId ?? ''}|${workspace.activeTutorFilterId ?? ''}';
+    if (_lastWorkspaceSignature.isNotEmpty && _lastWorkspaceSignature != sig) {
+      _lastWorkspaceSignature = sig;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _fetchExams();
+      });
+    } else {
+      _lastWorkspaceSignature = sig;
+    }
   }
 
   Future<void> _fetchExams() async {
@@ -210,6 +230,13 @@ class _StudentExamsScreenState extends State<StudentExamsScreen> {
                     splashRadius: 20,
                   ),
                 ],
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                child: WorkspaceSwitcherBar(
+                  compact: true,
+                  onWorkspaceChanged: _fetchExams,
+                ),
               ),
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),

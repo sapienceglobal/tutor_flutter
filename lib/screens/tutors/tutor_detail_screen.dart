@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import '../../models/tutor_model.dart';
 import '../../providers/appointment_provider.dart';
 import '../../utils/constants.dart';
+import '../common/chat/chat_detail_screen.dart';
 
 class TutorDetailScreen extends StatefulWidget {
   final TutorModel tutor;
@@ -293,6 +294,40 @@ class _TutorDetailScreenState extends State<TutorDetailScreen> {
                   _buildContactRow(Icons.email, widget.tutor.user.email),
                   const SizedBox(height: 8),
                   _buildContactRow(Icons.phone, widget.tutor.user.phone),
+                  const SizedBox(height: 20),
+
+                  // Direct Chat / Message Tutor
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatDetailScreen(
+                              partnerId: widget.tutor.user.id,
+                              partnerName: widget.tutor.user.name,
+                              partnerImage: widget.tutor.user.profileImage,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.white, size: 20),
+                      label: const Text(
+                        'Direct Chat with Tutor',
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 24),
 
                   // Booking Section

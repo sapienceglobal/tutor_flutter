@@ -90,14 +90,7 @@ class _AiBuddyScreenState extends State<AiBuddyScreen> {
         }
       }
     } on ApiException catch (e) {
-      if (e.featureLocked) {
-        setState(() {
-          _isLocked = true;
-          _lockMessage = e.message;
-        });
-      } else {
-        _showError(e.message);
-      }
+      _showError(e.message);
     } catch (e) {
       _showError(e.toString());
     } finally {
@@ -151,16 +144,7 @@ class _AiBuddyScreenState extends State<AiBuddyScreen> {
         _scrollToBottom();
       }
     } on ApiException catch (e) {
-      if (e.creditExhausted) {
-        _showCreditExhaustedDialog(e.message);
-      } else if (e.featureLocked) {
-        setState(() {
-          _isLocked = true;
-          _lockMessage = e.message;
-        });
-      } else {
-        _showError(e.message);
-      }
+      _showError(e.message);
       rethrow;
     } catch (e) {
       _showError('Failed to start a new chat: $e');
@@ -254,7 +238,7 @@ class _AiBuddyScreenState extends State<AiBuddyScreen> {
         return;
       }
       if (_activeSessionId == null) {
-        _showError('AI Study Assistant feature is currently locked or requires subscription upgrade.');
+        _showError('AI Study Assistant is not active in this workspace. Contact your Institute or Private Tutor.');
         setState(() => _isSending = false);
         return;
       }
@@ -287,7 +271,7 @@ class _AiBuddyScreenState extends State<AiBuddyScreen> {
       }
     } on ApiException catch (e) {
       if (e.creditExhausted) {
-        _showCreditExhaustedDialog(e.message);
+        _showError('Thinking through your question... Please continue asking!');
       } else {
         _showError(e.message);
       }
@@ -300,29 +284,6 @@ class _AiBuddyScreenState extends State<AiBuddyScreen> {
     }
   }
 
-  void _showCreditExhaustedDialog(String msg) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: AppThemeDesign.borderRadiusMedium),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: Colors.orange, size: 28),
-            SizedBox(width: 8),
-            Text('Credits Exhausted', style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Text(msg, style: const TextStyle(fontSize: 15, height: 1.4)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Okay', style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primary)),
-          )
-        ],
-      ),
-    );
-  }
-
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating),
@@ -332,12 +293,12 @@ class _AiBuddyScreenState extends State<AiBuddyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F3FF), // Soft purple page background matching website P.pageBg
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         flexibleSpace: Container(
           decoration: const BoxDecoration(
             gradient: LinearGradient(
-              colors: [Color(0xFF5B21B6), Color(0xFF7C3AED), Color(0xFF8B5CF6)],
+              colors: [Color(0xFF1A73E8), Color(0xFF0B57C9)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
             ),
@@ -706,7 +667,9 @@ class _AiBuddyScreenState extends State<AiBuddyScreen> {
             ),
             const SizedBox(height: 16),
             Text(
-              _lockMessage.isNotEmpty ? _lockMessage : 'This feature requires the AI Features subscription.',
+              _lockMessage.isNotEmpty
+                  ? _lockMessage
+                  : 'AI Study Assistant depends on your active Institute or Private Tutor plan.',
               textAlign: TextAlign.center,
               style: TextStyle(color: Colors.grey[700], fontSize: 16, height: 1.5),
             ),

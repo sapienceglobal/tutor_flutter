@@ -6,6 +6,7 @@ import '../../models/course_model.dart';
 import '../../models/lesson_model.dart';
 import '../../providers/enrollment_provider.dart';
 import '../../services/course_service.dart';
+import '../../services/enrollment_service.dart';
 import '../../services/payment_service.dart';
 import '../../services/wishlist_service.dart';
 import '../../utils/constants.dart';
@@ -24,6 +25,7 @@ import '../common/live_meeting_screen.dart';
 import '../../services/review_service.dart';
 import '../../providers/auth_provider.dart';
 import 'package:intl/intl.dart';
+import '../common/chat/chat_detail_screen.dart';
 
 class CourseDetailScreen extends StatefulWidget {
   final String courseId;
@@ -45,6 +47,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
   CourseModel? _course;
   List<LessonModel> _lessons = [];
   bool _isEnrolled = false;
+  String? _enrollmentStatus;
   bool _isWishlisted = false;
   bool _isTogglingWishlist = false;
   int _selectedTabIndex = 0;
@@ -152,6 +155,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
               .map((json) => LessonModel.fromJson(json))
               .toList();
           _isEnrolled = enrolled;
+          _enrollmentStatus = data['enrollmentStatus']?.toString();
           _selectedTabIndex = 0;
           _tabController = newController;
         });
@@ -402,29 +406,46 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
   Future<void> _enrollInCourse() async {
     if (_course == null) return;
 
-    // Handle Paid Course Flow
+    if (_enrollmentStatus == 'pending_payment') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Your offline payment proof is awaiting tutor confirmation.'),
+        ),
+      );
+      return;
+    }
+
+    // Handle Paid Course Flow (Offline Fee Submission vs Online Razorpay)
     if (!_course!.isFree && _course!.price > 0) {
+      if (_course!.pricingMode == 'offline') {
+        await _showOfflineFeeDialog();
+        return;
+      }
+
       try {
         final orderData = await _paymentService.createCourseOrder(_course!.id);
-        
+
         var options = {
           'key': orderData['key'],
           'amount': orderData['order']['amount'],
           'name': 'Sapience LMS',
           'description': 'Purchase: ${_course!.title}',
           'order_id': orderData['order']['id'],
-          'theme': {'color': '#6B4DF1'}
+          'theme': {'color': '#0B5CFF'}
         };
 
         _razorpay.open(options);
         return;
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Payment Init Error: $e')));
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Payment Init Error: $e')),
+        );
         return;
       }
     }
 
-    // Handle Free Course Flow (existing)
+    // Handle Free Course Flow
     final enrollmentProvider =
         Provider.of<EnrollmentProvider>(context, listen: false);
 
@@ -449,6 +470,180 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
         ),
       );
     }
+  }
+
+  Future<void> _showOfflineFeeDialog() async {
+    final course = _course!;
+    final refCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    final amountCtrl = TextEditingController(
+      text: course.price.toStringAsFixed(0),
+    );
+    bool submitting = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            16,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'Offline Fee & Access Request',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.navy,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Pay ₹${course.price.toStringAsFixed(0)} directly to your tutor/institute as instructed below, then submit confirmation.',
+                  style: const TextStyle(fontSize: 13, color: AppColors.textMuted),
+                ),
+                if (course.offlinePaymentInstructions.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.primarySoft,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Tutor Payment Instructions',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          course.offlinePaymentInstructions,
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: AppColors.navy,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 14),
+                TextField(
+                  controller: amountCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Amount Paid (INR)',
+                    prefixIcon: Icon(Icons.currency_rupee_rounded, size: 18),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: refCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'UPI Ref / Receipt / Cash Note (Optional)',
+                    prefixIcon: Icon(Icons.receipt_long_outlined, size: 18),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: noteCtrl,
+                  maxLines: 2,
+                  decoration: const InputDecoration(
+                    labelText: 'Message for Tutor (Optional)',
+                    prefixIcon: Icon(Icons.chat_bubble_outline, size: 18),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: submitting
+                        ? null
+                        : () async {
+                            setModalState(() => submitting = true);
+                            try {
+                              final amount =
+                                  double.tryParse(amountCtrl.text.trim()) ??
+                                      course.price;
+                              final res = await EnrollmentService.enrollInCourse(
+                                course.id,
+                                transactionRef: refCtrl.text.trim(),
+                                declaredAmount: amount,
+                                note: noteCtrl.text.trim(),
+                              );
+                              if (!ctx.mounted) return;
+                              Navigator.pop(ctx);
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    res['message']?.toString() ??
+                                        'Offline fee request sent for tutor confirmation.',
+                                  ),
+                                  backgroundColor: AppColors.success,
+                                ),
+                              );
+                              await _loadCourseData();
+                            } catch (e) {
+                              setModalState(() => submitting = false);
+                              if (ctx.mounted) {
+                                ScaffoldMessenger.of(ctx).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      e.toString().replaceAll('Exception: ', ''),
+                                    ),
+                                    backgroundColor: AppColors.error,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                    child: submitting
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text(
+                            'Submit Offline Fee Request',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -989,6 +1184,46 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                             ),
                           ),
                         ],
+                      ),
+                    ),
+                    InkWell(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => ChatDetailScreen(
+                              partnerId: _course!.tutor.user.id,
+                              partnerName: _course!.tutor.user.name,
+                              partnerImage: _course!.tutor.user.profileImage,
+                              courseId: _course!.id,
+                              courseTitle: _course!.title,
+                            ),
+                          ),
+                        );
+                      },
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: AppColors.primarySoft,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: AppColors.primary.withValues(alpha: 0.2)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.chat_bubble_outline_rounded, size: 14, color: AppColors.primary),
+                            SizedBox(width: 5),
+                            Text(
+                              'Chat',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.primary,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ],
@@ -2233,9 +2468,13 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                           ),
                         ),
                         Text(
-                          _course!.isFree
-                              ? 'Instant full access'
-                              : 'One-time enrollment',
+                          _enrollmentStatus == 'pending_payment'
+                              ? 'Awaiting tutor approval'
+                              : (_course!.isFree
+                                  ? 'Instant full access'
+                                  : (_course!.pricingMode == 'offline'
+                                      ? 'Offline fee confirmation'
+                                      : 'One-time online enrollment')),
                           style: const TextStyle(
                             fontSize: 11.5,
                             color: AppColors.textSecondary,
@@ -2257,38 +2496,50 @@ class _CourseDetailScreenState extends State<CourseDetailScreen>
                       fontSize: 14,
                       onTap: _openContinueLearning,
                     )
-                  : Consumer<EnrollmentProvider>(
-                      builder: (context, enrollmentProvider, _) {
-                        if (enrollmentProvider.isLoading) {
-                          return Container(
-                            height: 48,
-                            decoration: BoxDecoration(
-                              gradient: AppThemeDesign.greenToBlueGradient,
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                            alignment: Alignment.center,
-                            child: const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2.2,
-                              ),
-                            ),
-                          );
-                        }
-                        return SapienceButton(
-                          label: _course!.isFree
-                              ? 'Enroll Free'
-                              : 'Enroll Now • ₹${_course!.price.toStringAsFixed(0)}',
-                          trailingIcon: Icons.arrow_forward_rounded,
-                          variant: SapienceButtonVariant.greenToBlue,
+                  : _enrollmentStatus == 'pending_payment'
+                      ? SapienceButton(
+                          label: 'Fee Pending Approval',
+                          leadingIcon: Icons.hourglass_top_rounded,
+                          variant: SapienceButtonVariant.outlinedNavy,
                           height: 48,
-                          fontSize: 14,
+                          fontSize: 13.5,
                           onTap: _enrollInCourse,
-                        );
-                      },
-                    ),
+                        )
+                      : Consumer<EnrollmentProvider>(
+                          builder: (context, enrollmentProvider, _) {
+                            if (enrollmentProvider.isLoading) {
+                              return Container(
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  gradient: AppThemeDesign.greenToBlueGradient,
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                alignment: Alignment.center,
+                                child: const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2.2,
+                                  ),
+                                ),
+                              );
+                            }
+                            final String ctaLabel = _course!.isFree
+                                ? 'Enroll Free'
+                                : (_course!.pricingMode == 'offline'
+                                    ? 'Pay Offline • ₹${_course!.price.toStringAsFixed(0)}'
+                                    : 'Enroll Now • ₹${_course!.price.toStringAsFixed(0)}');
+                            return SapienceButton(
+                              label: ctaLabel,
+                              trailingIcon: Icons.arrow_forward_rounded,
+                              variant: SapienceButtonVariant.greenToBlue,
+                              height: 48,
+                              fontSize: 14,
+                              onTap: _enrollInCourse,
+                            );
+                          },
+                        ),
             ),
           ],
         ),

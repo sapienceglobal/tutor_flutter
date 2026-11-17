@@ -9,10 +9,10 @@ import '../../models/live_class_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/category_provider.dart';
 import '../../providers/course_provider.dart';
+import '../../providers/subscription_provider.dart';
 import '../../providers/tutor_provider.dart';
+import '../../providers/workspace_provider.dart';
 import '../../services/announcement_service.dart';
-import '../../services/api_service.dart';
-import '../../services/auth_service.dart';
 import '../../services/dashboard_service.dart';
 import '../../services/enrollment_service.dart';
 import '../../services/exam_service.dart';
@@ -20,6 +20,7 @@ import '../../services/live_class_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/constants.dart';
 import '../../widgets/sapience_ui.dart';
+import '../../widgets/workspace_switcher.dart';
 import '../common/announcements/announcements_screen.dart';
 import '../common/chat/conversations_screen.dart';
 import '../common/live_meeting_screen.dart';
@@ -175,10 +176,6 @@ class _StudentHomeContentState extends State<StudentHomeContent> {
   bool _showSearchBar = false;
   String _searchQuery = '';
 
-  List<dynamic> _myInstitutes = [];
-  dynamic _currentInstitute;
-  String _activeScope = 'institute';
-
   List<EnrollmentModel> _enrollments = [];
   List<LiveClass> _liveClasses = [];
   List<dynamic> _exams = [];
@@ -200,29 +197,24 @@ class _StudentHomeContentState extends State<StudentHomeContent> {
     super.dispose();
   }
 
-  Future<void> _loadInitialData() async {
-    await _fetchMembership();
-    await _refreshDashboardData();
+  String _currentWorkspaceScope(BuildContext context) {
+    final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
+    return workspace.isPrivateWorkspace ? 'private' : 'institute';
   }
 
-  Future<void> _fetchMembership() async {
-    try {
-      final token = await AuthService.getToken();
-      final res = await ApiService.get('/membership/my-institutes', token: token);
-      if (res['success'] == true && mounted) {
-        setState(() {
-          _myInstitutes = res['institutes'] ?? [];
-          _currentInstitute = res['currentInstitute'];
-          if (_currentInstitute == null) {
-            _activeScope = 'global';
-          }
-        });
-      }
-    } catch (_) {
-      if (mounted) {
-        setState(() => _activeScope = 'global');
-      }
+  Future<void> _loadInitialData() async {
+    final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
+    if (!workspace.isInitialized) {
+      await workspace.refreshWorkspace();
     }
+    if (!mounted) return;
+    final sub = Provider.of<SubscriptionProvider>(context, listen: false);
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    sub.syncWithWorkspace(
+      userMap: auth.rawUser ?? auth.user?.toJson(),
+      workspace: workspace,
+    );
+    await _refreshDashboardData();
   }
 
   Future<void> _refreshDashboardData() async {
@@ -230,14 +222,15 @@ class _StudentHomeContentState extends State<StudentHomeContent> {
     final categoryProvider = Provider.of<CategoryProvider>(context, listen: false);
     final tutorProvider = Provider.of<TutorProvider>(context, listen: false);
     final courseProvider = Provider.of<CourseProvider>(context, listen: false);
+    final scope = _currentWorkspaceScope(context);
 
     await Future.wait([
       categoryProvider.fetchCategories(),
-      tutorProvider.fetchTutors(scope: _activeScope),
-      courseProvider.fetchCourses(scope: _activeScope),
+      tutorProvider.fetchTutors(scope: scope),
+      courseProvider.fetchCourses(scope: scope),
       _fetchEnrollments(),
       _fetchLiveClasses(),
-      _fetchExams(scope: _activeScope),
+      _fetchExams(scope: scope),
       _fetchAnnouncements(),
       _fetchStudentStatsAndActivity(),
       _fetchUnreadNotifications(),
@@ -276,9 +269,10 @@ class _StudentHomeContentState extends State<StudentHomeContent> {
 
   Future<void> _fetchStudentStatsAndActivity() async {
     try {
+      final scope = _currentWorkspaceScope(context);
       final results = await Future.wait<dynamic>([
-        DashboardService.getStudentStats(scope: _activeScope),
-        DashboardService.getStudentActivity(scope: _activeScope),
+        DashboardService.getStudentStats(scope: scope),
+        DashboardService.getStudentActivity(scope: scope),
       ]);
       if (!mounted) return;
       setState(() {
@@ -397,7 +391,7 @@ class _StudentHomeContentState extends State<StudentHomeContent> {
             maxAttempts: maxAttempts,
           ),
         ),
-      ).then((_) => _fetchExams(scope: _activeScope));
+      ).then((_) => _fetchExams(scope: _currentWorkspaceScope(context)));
     } catch (e) {
       if (mounted) Navigator.of(context).pop();
       if (mounted) {
@@ -499,10 +493,10 @@ class _StudentHomeContentState extends State<StudentHomeContent> {
                   const SizedBox(height: 12),
                   _buildSearchResults(courseProvider.courses, tutorProvider.tutors),
                 ] else ...[
-                  if (_myInstitutes.isNotEmpty) ...[
-                    const SizedBox(height: 8),
-                    _buildScopeSwitcher(),
-                  ],
+                  const SizedBox(height: 8),
+                  WorkspaceSwitcherBar(
+                    onWorkspaceChanged: _refreshDashboardData,
+                  ),
                   const SizedBox(height: 10),
                   _buildHeroCarousel(authProvider.user?.name ?? 'Learner'),
                   const SizedBox(height: 14),
@@ -601,9 +595,9 @@ class _StudentHomeContentState extends State<StudentHomeContent> {
                     height: 1.05,
                   ),
                 ),
-                if (_activeScope == 'institute' && _currentInstitute != null)
+                if (Provider.of<WorkspaceProvider>(context).isInitialized)
                   Text(
-                    '${_currentInstitute['name']}',
+                    Provider.of<WorkspaceProvider>(context).activeWorkspaceLabel,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
@@ -709,25 +703,6 @@ class _StudentHomeContentState extends State<StudentHomeContent> {
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildScopeSwitcher() {
-    return SapienceSegmentedTabs(
-      tabs: [
-        _currentInstitute != null
-            ? '${_currentInstitute['name']}'
-            : 'My Institute',
-        'Global Campus',
-      ],
-      currentIndex: _activeScope == 'institute' ? 0 : 1,
-      onChanged: (idx) {
-        final next = idx == 0 ? 'institute' : 'global';
-        if (_activeScope != next) {
-          setState(() => _activeScope = next);
-          _refreshDashboardData();
-        }
-      },
     );
   }
 

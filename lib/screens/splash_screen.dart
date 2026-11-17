@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/subscription_provider.dart';
+import '../providers/workspace_provider.dart';
 import 'auth/login_screen.dart';
+import 'auth/pending_approval_hub_screen.dart';
 import 'home/home_screen.dart';
 import '../utils/constants.dart';
 import '../widgets/sapience_ui.dart';
@@ -48,16 +51,33 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
   Future<void> _checkAuth() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final workspaceProvider = Provider.of<WorkspaceProvider>(context, listen: false);
+    final subscriptionProvider = Provider.of<SubscriptionProvider>(context, listen: false);
     await authProvider.initialize();
+
+    if (authProvider.isLoggedIn && authProvider.user != null) {
+      await workspaceProvider.applyBootstrap(
+        authProvider.workspaceBootstrap,
+        userId: authProvider.user!.id,
+        role: authProvider.user!.role,
+      );
+      subscriptionProvider.syncWithWorkspace(
+        userMap: authProvider.rawUser ?? authProvider.user!.toJson(),
+        workspace: workspaceProvider,
+      );
+    }
 
     await Future.delayed(const Duration(milliseconds: 2200));
 
     if (!mounted) return;
 
     if (authProvider.isLoggedIn) {
+      final Widget target = workspaceProvider.hasActiveWorkspace
+          ? const HomeScreen()
+          : const PendingApprovalHubScreen();
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (context, animation, secondaryAnimation) => const HomeScreen(),
+          pageBuilder: (context, animation, secondaryAnimation) => target,
           transitionsBuilder: (context, animation, secondaryAnimation, child) {
             return FadeTransition(opacity: animation, child: child);
           },

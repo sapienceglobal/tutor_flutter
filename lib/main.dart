@@ -9,6 +9,7 @@ import 'providers/course_provider.dart';
 import 'providers/enrollment_provider.dart';
 import 'providers/tutor_dashboard_provider.dart';
 import 'providers/subscription_provider.dart';
+import 'providers/workspace_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/splash_screen.dart';
 import 'utils/constants.dart';
@@ -25,6 +26,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => WorkspaceProvider()),
         ChangeNotifierProvider(create: (_) => CategoryProvider()),
         ChangeNotifierProvider(create: (_) => TutorProvider()),
         ChangeNotifierProvider(create: (_) => AppointmentProvider()),

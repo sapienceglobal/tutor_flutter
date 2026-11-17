@@ -2,19 +2,16 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/course_model.dart';
+import 'api_service.dart';
 import 'auth_service.dart';
 
 class WishlistService {
   Future<List<CourseModel>> getWishlist() async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.get(
       Uri.parse('${ApiConfig.baseUrl}/wishlist'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     if (response.statusCode == 200) {
@@ -42,15 +39,10 @@ class WishlistService {
 
   Future<bool> addToWishlist(String courseId) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.post(
       Uri.parse('${ApiConfig.baseUrl}/wishlist'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-        'Content-Type': 'application/json',
-      },
+      headers: ApiService.buildHeaders(token: token),
       body: json.encode({'courseId': courseId}),
     );
 
@@ -59,14 +51,10 @@ class WishlistService {
 
   Future<bool> removeFromWishlist(String courseId) async {
     final token = await AuthService.getToken();
-    final apiKey = await AuthService.getApiKey();
 
     final response = await http.delete(
       Uri.parse('${ApiConfig.baseUrl}/wishlist/$courseId'),
-      headers: {
-        'Authorization': 'Bearer $token',
-        'x-api-key': apiKey ?? '',
-      },
+      headers: ApiService.buildHeaders(token: token, includeJsonContentType: false),
     );
 
     return response.statusCode == 200;

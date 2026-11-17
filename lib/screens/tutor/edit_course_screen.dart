@@ -3,8 +3,11 @@ import 'package:provider/provider.dart';
 import '../../models/course_model.dart';
 import '../../providers/course_provider.dart';
 import '../../providers/category_provider.dart';
+import '../../providers/workspace_provider.dart';
+import '../../services/payout_service.dart';
 import '../../utils/constants.dart';
 import '../../widgets/audience_selector.dart';
+import 'earnings/tutor_earnings_screen.dart';
 
 class EditCourseScreen extends StatefulWidget {
   final CourseModel course;
@@ -20,12 +23,15 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
   late TextEditingController _priceController;
+  late TextEditingController _offlineInstructionsController;
   late TextEditingController _durationController;
 
   String? _selectedCategoryId; // ✅ Changed to ID instead of object
   String _selectedLevel = 'beginner';
   String _selectedLanguage = 'English';
   bool _isFree = true;
+  String _pricingMode = 'offline';
+  String _payoutVerificationStatus = 'not_configured';
 
   String _audienceScope = 'institute';
   List<String> _audienceBatchIds = [];
@@ -41,6 +47,9 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
     _priceController = TextEditingController(
       text: widget.course.price.toString(),
     );
+    _offlineInstructionsController = TextEditingController(
+      text: widget.course.offlinePaymentInstructions,
+    );
     _durationController = TextEditingController(
       text: widget.course.duration.toString(),
     );
@@ -48,10 +57,15 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
     _selectedLevel = widget.course.level;
     _selectedLanguage = widget.course.language;
     _isFree = widget.course.isFree;
+    _pricingMode = widget.course.pricingMode == 'online' ? 'online' : 'offline';
     _selectedCategoryId = widget.course.category.id; // ✅ Store ID
 
+    final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
     final aud = widget.course.audience ?? {};
-    _audienceScope = aud['scope'] ?? 'institute';
+    final rawScope = aud['scope']?.toString();
+    _audienceScope = (rawScope == null || rawScope == 'global')
+        ? (workspace.isPrivateWorkspace ? 'tutor_network' : 'institute')
+        : rawScope;
     _audienceBatchIds = List<String>.from(aud['batchIds'] ?? []);
     _audienceStudentIds = List<String>.from(aud['studentIds'] ?? []);
 
@@ -61,7 +75,17 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
         listen: false,
       );
       categoryProvider.fetchCategories();
+      _loadPayoutStatus();
     });
+  }
+
+  Future<void> _loadPayoutStatus() async {
+    try {
+      final res = await PayoutService.getMyPayoutAccount();
+      final status = (res['payoutAccount']?['verificationStatus'] ?? 'not_configured')
+          .toString();
+      if (mounted) setState(() => _payoutVerificationStatus = status);
+    } catch (_) {}
   }
 
   @override
@@ -69,6 +93,7 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
     _titleController.dispose();
     _descriptionController.dispose();
     _priceController.dispose();
+    _offlineInstructionsController.dispose();
     _durationController.dispose();
     super.dispose();
   }
@@ -88,12 +113,22 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
 
     final courseProvider = Provider.of<CourseProvider>(context, listen: false);
 
+    final double numericPrice =
+        _isFree ? 0 : (double.tryParse(_priceController.text) ?? 0);
+    final String effectivePricingMode = (_isFree || numericPrice <= 0)
+        ? 'free'
+        : _pricingMode;
+
     final updates = {
       'title': _titleController.text.trim(),
       'description': _descriptionController.text.trim(),
       'categoryId': _selectedCategoryId,
-      'price': _isFree ? 0 : double.tryParse(_priceController.text) ?? 0,
-      'isFree': _isFree,
+      'price': numericPrice,
+      'isFree': _isFree || numericPrice <= 0,
+      'pricingMode': effectivePricingMode,
+      'offlinePaymentInstructions': effectivePricingMode == 'offline'
+          ? _offlineInstructionsController.text.trim()
+          : '',
       'level': _selectedLevel,
       'duration': double.tryParse(_durationController.text) ?? 0,
       'language': _selectedLanguage,
@@ -375,6 +410,8 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
                           return null;
                         },
                       ),
+                      const SizedBox(height: 14),
+                      _buildPricingModeSection(),
                     ],
                   ],
                 ),
@@ -421,6 +458,99 @@ class _EditCourseScreenState extends State<EditCourseScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildPricingModeSection() {
+    final workspace = Provider.of<WorkspaceProvider>(context, listen: false);
+    final bool isPrivateStudio = workspace.isPrivateWorkspace;
+    final bool isPayoutVerified = _payoutVerificationStatus == 'verified';
+    final bool onlineAllowed = !isPrivateStudio || isPayoutVerified;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const Text(
+          'Fee Collection Mode',
+          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            ChoiceChip(
+              label: const Text('Offline / Direct Fee'),
+              selected: _pricingMode == 'offline',
+              selectedColor: AppColors.primary,
+              labelStyle: TextStyle(
+                color: _pricingMode == 'offline' ? Colors.white : AppColors.navy,
+                fontWeight: FontWeight.w600,
+              ),
+              onSelected: (_) => setState(() => _pricingMode = 'offline'),
+            ),
+            ChoiceChip(
+              label: Text(
+                onlineAllowed
+                    ? 'Online Razorpay'
+                    : 'Online Razorpay (KYC Required)',
+              ),
+              selected: _pricingMode == 'online',
+              selectedColor: AppColors.primary,
+              labelStyle: TextStyle(
+                color: _pricingMode == 'online'
+                    ? Colors.white
+                    : (onlineAllowed ? AppColors.navy : AppColors.textMuted),
+                fontWeight: FontWeight.w600,
+              ),
+              onSelected: (_) {
+                if (!onlineAllowed) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Verify your Bank/UPI payout account in Earnings before switching to online checkout.',
+                      ),
+                    ),
+                  );
+                  return;
+                }
+                setState(() => _pricingMode = 'online');
+              },
+            ),
+          ],
+        ),
+        if (isPrivateStudio && !isPayoutVerified) ...[
+          const SizedBox(height: 8),
+          TextButton.icon(
+            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const TutorEarningsScreen()),
+              ).then((_) => _loadPayoutStatus());
+            },
+            icon: const Icon(Icons.account_balance_outlined, size: 16),
+            label: Text(
+              'Payout KYC: $_payoutVerificationStatus — Setup Bank/UPI',
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+            ),
+          ),
+        ],
+        if (_pricingMode == 'offline') ...[
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _offlineInstructionsController,
+            maxLines: 3,
+            decoration: InputDecoration(
+              labelText: 'Offline Payment Instructions',
+              hintText: 'Bank/UPI or in-class fee instructions',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

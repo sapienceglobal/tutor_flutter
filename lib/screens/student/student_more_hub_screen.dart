@@ -19,7 +19,7 @@ import '../common/announcements/announcements_screen.dart';
 import '../common/chat/conversations_screen.dart';
 import '../common/notifications/notifications_screen.dart';
 import 'payments/student_payments_screen.dart';
-import '../common/subscription/personal_subscription_screen.dart';
+import '../auth/pending_approval_hub_screen.dart';
 
 class StudentMoreHubScreen extends StatelessWidget {
   const StudentMoreHubScreen({super.key});
@@ -206,8 +206,8 @@ class StudentMoreHubScreen extends StatelessWidget {
                 ),
                 _buildHubTile(
                   context,
-                  title: 'Find a Tutor',
-                  subtitle: 'Direct booking',
+                  title: 'My Tutors',
+                  subtitle: 'Connected mentors',
                   icon: Icons.person_search_outlined,
                   color: Colors.pink.shade600,
                   targetScreen: const TutorsScreen(),
@@ -295,11 +295,11 @@ class StudentMoreHubScreen extends StatelessWidget {
                 const SizedBox(height: 10),
                 _buildListTile(
                   context,
-                  title: 'Personal Subscription',
-                  subtitle: 'Upgrade membership to unlock smart AI features',
-                  icon: Icons.stars_rounded,
+                  title: 'Workspaces & Connections',
+                  subtitle: 'Connect institutes, private tutors, or enter an invite code',
+                  icon: Icons.workspaces_outline,
                   color: Colors.amber.shade800,
-                  targetScreen: const PersonalSubscriptionScreen(),
+                  targetScreen: const PendingApprovalHubScreen(allowBackToPortal: true),
                 ),
               ],
             ),
