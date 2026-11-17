@@ -7,13 +7,26 @@ class ApiConfig {
   // static const String baseUrl = 'http://195.35.20.207:4000/api';
   // 
   // Production (Hostinger VPS - Option B: Web Proxy via Port 5000 - recommended if port 4000 is firewalled):
-  static const String baseUrl = 'https://yaadkaro.cloud/api/proxy';
+  static const String baseUrl = String.fromEnvironment(
+    'BASE_URL',
+    defaultValue: 'https://yaadkaro.cloud/api/proxy',
+  );
   
-  static const String webUrl = 'https://yaadkaro.cloud'; // Frontend URL for WebViews
-  static const String mediaBaseUrl = 'http://195.35.20.207:4000'; // Direct Backend Media Origin (/uploads)
+  static const String webUrl = String.fromEnvironment(
+    'WEB_URL',
+    defaultValue: 'https://yaadkaro.cloud',
+  );
+
+  static const String mediaBaseUrl = String.fromEnvironment(
+    'MEDIA_BASE_URL',
+    defaultValue: 'http://195.35.20.207:4000',
+  );
 
   static String get socketUrl {
-    return 'http://195.35.20.207:4000';
+    return const String.fromEnvironment(
+      'SOCKET_URL',
+      defaultValue: 'http://195.35.20.207:4000',
+    );
   }
 
   /// Resolves relative media paths (/uploads/..., uploads/..., /media/...) and upgrades http://res.cloudinary.com to https://
